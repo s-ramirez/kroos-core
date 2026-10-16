@@ -146,6 +146,23 @@ On iMessage, which can't edit messages, kroos shows the typing indicator for
 the whole turn instead, refreshing it during long tool runs. It needs the
 BlueBubbles private API and `imessage.read_receipts` (on by default).
 
+## Slash commands (Discord, Telegram)
+
+On startup kroos registers its own commands with the bot, replacing any left by
+other software using the same bot (e.g. a previous Hermes install):
+
+| Command | What it does |
+|---|---|
+| `/new [message]` | Start a new conversation |
+| `/model [choice]` | List models or switch this conversation's model |
+| `/doctor [note\|status]` | Investigate and fix problems |
+| `/skill <name> [args]` | Run a skill |
+| `/distill` | Refresh long-term memory from this session |
+
+On Discord they appear with autocomplete; only owners can run them (anyone, if
+`discord.allow_all_users` is on). Telegram shows them in the command menu.
+Typing the same text as a message also works everywhere.
+
 ## Self-healing
 
 Kroos keeps running when parts of it fail, and can fix itself with your approval:

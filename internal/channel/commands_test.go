@@ -118,3 +118,19 @@ func TestCommandExpanderRecordsSkillUsage(t *testing.T) {
 		t.Fatalf("expected one recorded use, got %+v", got)
 	}
 }
+
+func TestExpandMenuAliases(t *testing.T) {
+	e := &CommandExpander{Skills: skills.NewRegistry(nil)}
+	if got, _ := e.Expand("/distill"); got != DistillInstruction {
+		t.Fatalf("/distill = %q", got)
+	}
+	if _, err := e.Expand("/skill missing args"); err == nil || !strings.Contains(err.Error(), `"missing"`) {
+		t.Fatalf("/skill alias err = %v", err)
+	}
+	if got := CommandText("model", " 3 "); got != "/model 3" {
+		t.Fatalf("CommandText = %q", got)
+	}
+	if got := CommandText("doctor", ""); got != "/doctor" {
+		t.Fatalf("CommandText = %q", got)
+	}
+}

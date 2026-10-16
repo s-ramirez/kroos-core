@@ -153,6 +153,7 @@ func (c *Channel) Listen(ctx context.Context, out chan<- channel.Inbound) error 
 	}
 	c.botID, c.botUsername = me.ID, me.Username
 	logf("connected as @%s (%d)", c.botUsername, c.botID)
+	c.registerCommands(ctx)
 
 	var offset int64
 	backoff := time.Second
@@ -278,6 +279,29 @@ func (c *Channel) accept(m *message) (string, string) {
 		text = fmt.Sprintf("[%s%s]: %s", name, role, text)
 	}
 	return text, ""
+}
+
+// registerCommands sets kroos's command menu and clears scoped menus left
+// by previous software using the same bot (they'd override the default).
+func (c *Channel) registerCommands(ctx context.Context) {
+	for _, scope := range []string{"all_private_chats", "all_group_chats", "all_chat_administrators"} {
+		if err := c.call(ctx, "deleteMyCommands", map[string]any{"scope": map[string]string{"type": scope}}, nil); err != nil {
+			logf("clear %s commands: %v", scope, err)
+		}
+	}
+	var cmds []map[string]string
+	for _, bc := range channel.BotCommands {
+		desc := bc.Description
+		if bc.Arg != "" {
+			desc += " (/" + bc.Name + " <" + bc.Arg + ">)"
+		}
+		cmds = append(cmds, map[string]string{"command": bc.Name, "description": desc})
+	}
+	if err := c.call(ctx, "setMyCommands", map[string]any{"commands": cmds}, nil); err != nil {
+		logf("register commands: %v", err)
+		return
+	}
+	logf("registered %d commands", len(cmds))
 }
 
 // Send delivers a reply as plain text (no parse_mode, so Markdown in the

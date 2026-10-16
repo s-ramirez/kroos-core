@@ -72,6 +72,8 @@ type fakeAPI struct {
 	mu      sync.Mutex
 	updates []update
 	sent    []map[string]any
+	calls   []string // command-menu calls, in order
+	menu    []any    // last setMyCommands payload
 }
 
 func (f *fakeAPI) handler(t *testing.T) http.HandlerFunc {
@@ -95,6 +97,18 @@ func (f *fakeAPI) handler(t *testing.T) http.HandlerFunc {
 				result = []update{}
 				time.Sleep(20 * time.Millisecond)
 			}
+		case "deleteMyCommands":
+			scope, _ := params["scope"].(map[string]any)
+			f.mu.Lock()
+			f.calls = append(f.calls, "delete:"+fmt.Sprint(scope["type"]))
+			f.mu.Unlock()
+			result = true
+		case "setMyCommands":
+			f.mu.Lock()
+			f.calls = append(f.calls, "set")
+			f.menu, _ = params["commands"].([]any)
+			f.mu.Unlock()
+			result = true
 		case "sendMessage":
 			f.mu.Lock()
 			f.sent = append(f.sent, params)
@@ -225,5 +239,29 @@ func TestHomeTopic(t *testing.T) {
 	}
 	if New(Config{HomeChannel: "-100", HomeThreadID: "1"}).Home() != "-100" {
 		t.Error("General topic should omit thread id")
+	}
+}
+
+func TestListenRegistersCommandMenu(t *testing.T) {
+	api := &fakeAPI{}
+	srv := httptest.NewServer(api.handler(t))
+	defer srv.Close()
+	c := New(Config{Token: "TOKEN", OwnerIDs: []string{"1"}, APIBase: srv.URL, PollTimeout: time.Millisecond})
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	_ = c.Listen(ctx, make(chan channel.Inbound, 1))
+
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	want := "delete:all_private_chats,delete:all_group_chats,delete:all_chat_administrators,set"
+	if got := strings.Join(api.calls, ","); got != want {
+		t.Fatalf("calls = %s", got)
+	}
+	if len(api.menu) != len(channel.BotCommands) {
+		t.Fatalf("menu = %v", api.menu)
+	}
+	first, _ := api.menu[0].(map[string]any)
+	if first["command"] != "new" {
+		t.Fatalf("first command = %v", first)
 	}
 }

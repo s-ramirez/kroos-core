@@ -13,6 +13,30 @@ const (
 	MemoryDistillCommand = "/memory:distill"
 )
 
+// BotCommand is a slash command kroos registers with chat platforms that
+// have a command menu (Discord application commands, Telegram setMyCommands).
+type BotCommand struct {
+	Name        string // lowercase [a-z0-9_], valid on Discord and Telegram
+	Description string
+	Arg         string // optional free-text argument name ("" = none)
+	ArgDesc     string
+}
+
+// BotCommands are the commands kroos understands as typed text; registering
+// them replaces any commands left on the bot by other software.
+var BotCommands = []BotCommand{
+	{Name: "new", Description: "Start a new conversation", Arg: "message", ArgDesc: "Optional first message"},
+	{Name: "model", Description: "List models or switch this conversation's model", Arg: "choice", ArgDesc: "Number, model name, provider:model, or default"},
+	{Name: "doctor", Description: "Investigate and fix kroos problems", Arg: "note", ArgDesc: "What's wrong, or \"status\""},
+	{Name: "skill", Description: "Run a skill", Arg: "name", ArgDesc: "Skill name followed by optional arguments"},
+	{Name: "distill", Description: "Refresh long-term memory from this session"},
+}
+
+// CommandText is the text a slash command stands for ("/model 3").
+func CommandText(name, arg string) string {
+	return strings.TrimSpace("/" + name + " " + strings.TrimSpace(arg))
+}
+
 // ParseResetCommand reports whether input begins with /new or /reset
 // (followed by whitespace or end-of-input) and returns any trailing
 // body. The tail has surrounding whitespace trimmed. A trailing body
@@ -58,6 +82,13 @@ type CommandExpander struct {
 }
 
 func (e *CommandExpander) Expand(input string) (string, error) {
+	// Menu-friendly aliases (platform command names can't contain ':').
+	if input == "/distill" {
+		input = MemoryDistillCommand
+	}
+	if rest, ok := strings.CutPrefix(input, "/skill "); ok {
+		input = SkillPrefix + strings.TrimSpace(rest)
+	}
 	if input == MemoryDistillCommand {
 		return DistillInstruction, nil
 	}

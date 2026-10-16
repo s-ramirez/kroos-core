@@ -113,11 +113,22 @@ func (c *Channel) Listen(ctx context.Context, out chan<- channel.Inbound) error 
 	if err != nil {
 		return fmt.Errorf("discord: new session: %w", err)
 	}
-	s.Identify.Intents = discordgo.IntentsGuildMessages |
+	s.Identify.Intents = discordgo.IntentsGuilds |
+		discordgo.IntentsGuildMessages |
 		discordgo.IntentsDirectMessages |
 		discordgo.IntentsMessageContent
 
 	s.AddHandler(c.makeHandler(ctx, out))
+	s.AddHandler(c.makeInteractionHandler(ctx, out))
+	// Server-scoped commands from previous software would shadow ours: clear them.
+	s.AddHandler(func(s *discordgo.Session, g *discordgo.GuildCreate) {
+		if c.botID == "" {
+			return
+		}
+		if _, err := s.ApplicationCommandBulkOverwrite(c.botID, g.ID, []*discordgo.ApplicationCommand{}); err != nil {
+			fmt.Fprintf(os.Stderr, "[discord] clear server commands in %s: %v\n", g.ID, err)
+		}
+	})
 
 	if err := s.Open(); err != nil {
 		return fmt.Errorf("discord: open gateway: %w", err)
@@ -127,6 +138,7 @@ func (c *Channel) Listen(ctx context.Context, out chan<- channel.Inbound) error 
 		c.botID = s.State.User.ID
 	}
 	fmt.Fprintf(os.Stderr, "[discord] gateway connected as %s\n", c.botID)
+	c.registerCommands(s)
 
 	<-ctx.Done()
 	_ = s.Close()
@@ -288,6 +300,85 @@ func (c *Channel) makeHandler(ctx context.Context, out chan<- channel.Inbound) f
 		case out <- msg:
 		}
 	}
+}
+
+// applicationCommands converts kroos's command list for Discord.
+func applicationCommands() []*discordgo.ApplicationCommand {
+	var cmds []*discordgo.ApplicationCommand
+	for _, bc := range channel.BotCommands {
+		cmd := &discordgo.ApplicationCommand{Name: bc.Name, Description: bc.Description}
+		if bc.Arg != "" {
+			cmd.Options = []*discordgo.ApplicationCommandOption{{
+				Type: discordgo.ApplicationCommandOptionString, Name: bc.Arg, Description: bc.ArgDesc,
+			}}
+		}
+		cmds = append(cmds, cmd)
+	}
+	return cmds
+}
+
+// registerCommands replaces the bot's global commands with kroos's (this
+// removes commands left by previous software using the same bot).
+func (c *Channel) registerCommands(s *discordgo.Session) {
+	if c.botID == "" {
+		return
+	}
+	cmds, err := s.ApplicationCommandBulkOverwrite(c.botID, "", applicationCommands())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[discord] register commands: %v\n", err)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "[discord] registered %d slash commands\n", len(cmds))
+}
+
+// makeInteractionHandler turns slash commands into the equivalent typed
+// text ("/model 3") and dispatches it like a message.
+func (c *Channel) makeInteractionHandler(ctx context.Context, out chan<- channel.Inbound) func(*discordgo.Session, *discordgo.InteractionCreate) {
+	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		if i.Type != discordgo.InteractionApplicationCommand {
+			return
+		}
+		text, userID, ok := c.acceptInteraction(i.Interaction)
+		resp := &discordgo.InteractionResponse{Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Content: "`" + text + "`"}}
+		if !ok {
+			resp.Data = &discordgo.InteractionResponseData{Content: "Only the bot's owners can use kroos commands.", Flags: discordgo.MessageFlagsEphemeral}
+		}
+		if err := s.InteractionRespond(i.Interaction, resp); err != nil {
+			fmt.Fprintf(os.Stderr, "[discord] interaction respond: %v\n", err)
+		}
+		if !ok {
+			fmt.Fprintf(os.Stderr, "[discord] dropped command from %s: non-owner\n", userID)
+			return
+		}
+		if i.GuildID != "" {
+			c.guildChannels.Store(i.ChannelID, struct{}{})
+		}
+		fmt.Fprintf(os.Stderr, "[discord] accepted command %q from %s (channel=%s)\n", i.ApplicationCommandData().Name, userID, i.ChannelID)
+		select {
+		case <-ctx.Done():
+		case out <- channel.Inbound{Channel: channelName, Thread: i.ChannelID, Sender: userID, Content: text, Kind: channel.KindUser, ReceivedAt: time.Now()}:
+		}
+	}
+}
+
+// acceptInteraction returns the command text, the invoking user, and
+// whether they may run it (owners, or anyone with AllowAll).
+func (c *Channel) acceptInteraction(i *discordgo.Interaction) (text, userID string, ok bool) {
+	if i.Member != nil && i.Member.User != nil {
+		userID = i.Member.User.ID
+	} else if i.User != nil {
+		userID = i.User.ID
+	}
+	data := i.ApplicationCommandData()
+	arg := ""
+	for _, o := range data.Options {
+		if o.Type == discordgo.ApplicationCommandOptionString {
+			arg = o.StringValue()
+		}
+	}
+	text = channel.CommandText(data.Name, arg)
+	return text, userID, c.isOwner(userID) || c.cfg.AllowAll
 }
 
 // accept applies sender and mention gating to m. It returns the cleaned
