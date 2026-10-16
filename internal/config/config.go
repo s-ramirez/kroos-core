@@ -41,6 +41,8 @@ var Keys = []Key{
 	{"skills.stale_after", "KROOS_SKILL_STALE_AFTER", "720h", "Idle time before an agent-created skill is marked stale", false},
 	{"skills.archive_after", "KROOS_SKILL_ARCHIVE_AFTER", "2160h", "Idle time before an agent-created skill is archived", false},
 	{"skills.review_interval", "KROOS_SKILL_REVIEW_INTERVAL", "10", "Tool calls between background skill reviews; 0 disables", false},
+	{"doctor.source_dir", "KROOS_SOURCE_DIR", "", "kroos code checkout the doctor may fix via PRs (default: checkout containing the binary)", false},
+	{"doctor.log_file", "KROOS_LOG_FILE", "", "Process log the doctor inspects (set by deploy)", false},
 	{"web_search.brave_api_key", "KROOS_BRAVE_API_KEY", "", "Brave Search API key", true},
 
 	{"heartbeat.interval", "KROOS_HEARTBEAT_INTERVAL", "", "Heartbeat interval (Go duration); empty disables", false},

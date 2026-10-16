@@ -126,6 +126,30 @@ In a session:
 
 The `/model` choice is per conversation and persists with its history.
 
+## Self-healing
+
+Kroos keeps running when parts of it fail, and can fix itself with your approval:
+
+- **Isolation:** a channel that can't connect (bad token, unreachable server)
+  is retried with backoff while everything else keeps working. Providers fall
+  back to each other.
+- **Alerts:** after 3 consecutive failures kroos opens an incident and posts it
+  to a working channel's home thread (or the CLI):
+  `⚠️ kroos: channel:telegram is failing (3 attempts): … Reply /doctor to let me investigate and fix it.`
+- **`/doctor [note]`:** starts an isolated investigation and reports back in the
+  same chat (Problem / Fixed / You need to). The doctor reads logs and config,
+  tests connectivity, and then:
+  - changes non-secret settings and restarts channels or the whole process (as a service)
+  - for code bugs, fixes them in a git worktree on a `doctor/<slug>` branch,
+    runs the tests, and opens a PR with `gh pr create`. It never pushes to main
+    or merges.
+  - it can't set credentials. It tells you exactly which key to set.
+
+Guardrails block the doctor from changing the live checkout, pushing anything
+but `doctor/*` branches, force-pushing, merging, or writing `auth.json` or
+`.env`. PRs need `git push` (SSH key without a passphrase, or a credential
+helper) and an authenticated `gh` on the machine running kroos.
+
 ## Configuration
 
 Every setting has a dotted key. `kroos config keys` lists them all.

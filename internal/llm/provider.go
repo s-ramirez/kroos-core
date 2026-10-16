@@ -24,6 +24,9 @@ type Providers struct {
 	OMLXKey  string
 	AuthPath string // ChatGPT token store (default $KROOS_HOME/auth.json)
 	Logf     func(format string, args ...any)
+	// OnResult, if set, is told the outcome of every request that reached a
+	// provider (err nil = success). Unconfigured providers aren't reported.
+	OnResult func(provider string, err error)
 
 	mu          sync.Mutex
 	auth        *ChatGPTAuth

@@ -24,6 +24,7 @@ import (
 	"github.com/s-ramirez/kroos-core/internal/cli"
 	"github.com/s-ramirez/kroos-core/internal/compaction"
 	"github.com/s-ramirez/kroos-core/internal/config"
+	"github.com/s-ramirez/kroos-core/internal/health"
 	heartbeatPkg "github.com/s-ramirez/kroos-core/internal/heartbeat"
 	"github.com/s-ramirez/kroos-core/internal/llm"
 	"github.com/s-ramirez/kroos-core/internal/memory"
@@ -83,6 +84,15 @@ func main() {
 	loadEnvAndConfig()
 
 	providers := newProvidersFromEnv()
+	service := os.Getenv("KROOS_SERVICE") == "1"
+	monitor := health.NewMonitor(filepath.Join(config.Home(), "state", "health.json"))
+	providers.OnResult = func(p string, err error) {
+		if err != nil {
+			monitor.Report("provider:"+p, err)
+		} else if monitor.Resolve("provider:" + p) {
+			fmt.Fprintf(os.Stderr, "[health] provider %s recovered\n", p)
+		}
+	}
 	provider := providers.Default
 
 	model := os.Getenv("KROOS_MODEL") // "" = provider default
@@ -93,8 +103,8 @@ func main() {
 	agentDirs := []string{kroosHome}
 	agentCfg, err := subagents.LoadAgentConfig(agentDirs...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: loading agent config: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "warning: ignoring agent config: %v\n", err)
+		agentCfg = nil
 	}
 	if agentCfg != nil {
 		if agentCfg.Provider != "" {
@@ -494,6 +504,10 @@ func main() {
 			taskToolPool = append(taskToolPool, t)
 		}
 	}
+	doctorTools := append(filterTools(builtinTools, nameSet([]string{"read", "write", "edit", "bash", "grep", "ls", "find", "web_fetch", "web_search"})),
+		tools.NewKroosConfigTool(config.GlobalPath()),
+		tools.NewKroosHealthTool(monitor, service),
+	)
 	taskFactory = func(t tasks.Task) (tasks.AgentSpec, error) {
 		client := chatClient
 		if t.Model != "" {
@@ -502,6 +516,11 @@ func main() {
 		switch t.Agent {
 		case cli.SkillReviewAgent:
 			return tasks.AgentSpec{Agent: cli.NewSkillReviewRunner(client, skillTools)}, nil
+		case cli.DoctorAgent:
+			return cli.BuildDoctor(client, doctorTools, cli.DoctorConfig{
+				Home: kroosHome, SourceDir: sourceDir(), LogFile: os.Getenv("KROOS_LOG_FILE"),
+				Monitor: monitor, Note: t.Prompt,
+			}), nil
 		case cli.CuratorAgent:
 			return cli.BuildCurator(client, skillTools, curatorCfg)
 		}
@@ -597,6 +616,12 @@ func main() {
 
 	channels := channel.NewRegistry()
 	channelsRef = channels
+	monitor.OnIncident = incidentNotifier(func() *channel.Registry { return channelsRef }, monitor, func(f string, a ...any) {
+		fmt.Fprintf(os.Stderr, "[health] "+f+"\n", a...)
+	})
+	taskExecutor.AfterRun = doctorAfterRun(monitor, taskExecutor.Deliver, service, func(f string, a ...any) {
+		fmt.Fprintf(os.Stderr, "[health] "+f+"\n", a...)
+	})
 	cliCh := clichannel.NewStdio(os.Stdin, os.Stdout)
 	channels.Register(cliCh)
 	if scheduler != nil {
@@ -643,12 +668,16 @@ func main() {
 	}
 
 	dispatcher := &channel.Dispatcher{
-		Channels:     channels,
-		Store:        convStore,
-		Commands:     &channel.CommandExpander{Skills: skillsRegistry, Usage: skillUsage},
-		ModelCommand: sessionModelCommand(providers, modelChoice{provider, displayModel(providers, model)}),
-		Handler:      &channel.Router{Default: &runner, Routes: routes},
-		OnUserInput:  func() { userActivity = true },
+		Channels: channels,
+		Store:    convStore,
+		Commands: &channel.CommandExpander{Skills: skillsRegistry, Usage: skillUsage},
+		SlashCommands: map[string]channel.SlashCommand{
+			"model":  sessionModelCommand(providers, modelChoice{provider, displayModel(providers, model)}),
+			"doctor": doctorCommand(taskExecutor, monitor),
+		},
+		Health:      monitor,
+		Handler:     &channel.Router{Default: &runner, Routes: routes},
+		OnUserInput: func() { userActivity = true },
 		Logger: func(format string, args ...any) {
 			fmt.Fprintf(os.Stderr, "[dispatcher] "+format+"\n", args...)
 		},

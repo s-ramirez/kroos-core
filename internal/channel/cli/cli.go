@@ -40,6 +40,9 @@ func NewStdio(stdin io.Reader, stdout io.Writer) *Channel {
 
 func (c *Channel) Name() string { return Name }
 
+// Terminal: ending the CLI (Ctrl-D) ends the process.
+func (c *Channel) Terminal() bool { return true }
+
 // Listen writes a prompt, reads one line, pushes it onto the bus, and
 // loops. It exits on EOF or ctx cancellation.
 func (c *Channel) Listen(ctx context.Context, out chan<- channel.Inbound) error {

@@ -72,6 +72,13 @@ type Channel interface {
 	Send(ctx context.Context, msg Outbound) error
 }
 
+// Terminal is implemented by channels whose Listen returning ends the
+// dispatcher (the interactive CLI: Ctrl-D quits). Other channels are
+// restarted with backoff on error so one failing channel never stops the rest.
+type Terminal interface {
+	Terminal() bool
+}
+
 // Homer is implemented by channels with a configured home thread: the
 // default destination for deliveries that name no recipient.
 type Homer interface {

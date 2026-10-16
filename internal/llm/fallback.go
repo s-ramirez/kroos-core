@@ -69,6 +69,12 @@ func (f *FallbackClient) Chat(ctx context.Context, messages []types.Message, too
 		if err == nil {
 			var resp *types.ChatResponse
 			resp, err = client.Chat(ctx, messages, tools)
+			if ctx.Err() != nil {
+				return nil, err
+			}
+			if f.p.OnResult != nil {
+				f.p.OnResult(t.provider, err)
+			}
 			if err == nil {
 				f.p.markDown(t.provider, 0)
 				return resp, nil

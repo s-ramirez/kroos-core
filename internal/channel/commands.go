@@ -91,13 +91,13 @@ func (e *CommandExpander) Expand(input string) (string, error) {
 	return "", fmt.Errorf("unknown skill %q", name)
 }
 
-// parseModelCommand matches "/model" or "/model <args>".
-func parseModelCommand(input string) (args string, ok bool) {
+// parseSlash matches "/<name>" or "/<name> <args>".
+func parseSlash(input, name string) (args string, ok bool) {
 	input = strings.TrimSpace(input)
-	if input == "/model" {
+	if input == "/"+name {
 		return "", true
 	}
-	rest, found := strings.CutPrefix(input, "/model ")
+	rest, found := strings.CutPrefix(input, "/"+name+" ")
 	if !found {
 		return "", false
 	}

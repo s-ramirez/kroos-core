@@ -96,6 +96,8 @@ type Executor struct {
 	Factory Factory
 	Deliver Deliverer
 	Log     func(format string, args ...any)
+	// AfterRun, if set, is called once a run is finished and recorded.
+	AfterRun func(t Task, r Run)
 
 	ctx     context.Context
 	mu      sync.Mutex
@@ -159,6 +161,9 @@ func (e *Executor) run(runID string, t Task) {
 		rec.FinishedAt = time.Now().UTC()
 		if err := e.appendHistory(rec); err != nil {
 			e.logf("history append failed: %v", err)
+		}
+		if e.AfterRun != nil {
+			e.AfterRun(t, rec)
 		}
 	}()
 
