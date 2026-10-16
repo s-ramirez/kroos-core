@@ -33,6 +33,7 @@ import (
 	"github.com/s-ramirez/kroos-core/internal/schedule"
 	"github.com/s-ramirez/kroos-core/internal/skills"
 	"github.com/s-ramirez/kroos-core/internal/subagents"
+	"github.com/s-ramirez/kroos-core/internal/tasks"
 	"github.com/s-ramirez/kroos-core/internal/tools"
 )
 
@@ -266,12 +267,44 @@ func main() {
 			return memoryStore
 		}, memoryStore),
 	}
-	if scheduleStore != nil {
-		builtinTools = append(builtinTools, tools.NewScheduleTool(scheduleStore))
-	}
-	// send_file resolves the channel registry lazily: channels are
-	// registered after tools are built.
+	// send_file and task delivery resolve the channel registry lazily:
+	// channels are registered after tools are built.
 	var channelsRef *channel.Registry
+
+	// Background tasks: the factory is assigned once tools/skills exist.
+	taskCtx, cancelTasks := context.WithCancel(context.Background())
+	defer cancelTasks()
+	var taskFactory tasks.Factory
+	taskExecutor := tasks.NewExecutor(taskCtx, filepath.Join(cwd, ".kroos", "tasks"),
+		func(t tasks.Task) (tasks.AgentSpec, error) {
+			if taskFactory == nil {
+				return tasks.AgentSpec{}, fmt.Errorf("task runtime not ready")
+			}
+			return taskFactory(t)
+		},
+		func(ctx context.Context, d schedule.Delivery, text string) error {
+			if channelsRef == nil {
+				return fmt.Errorf("channels not ready")
+			}
+			ch, ok := channelsRef.Lookup(d.Target)
+			if !ok {
+				return fmt.Errorf("delivery target %q not available", d.Target)
+			}
+			to := d.To
+			if d.Target == clichannel.Name && to == "" {
+				to = clichannel.DefaultThread
+			}
+			if to == "" {
+				return fmt.Errorf("delivery target %q needs deliver_to", d.Target)
+			}
+			return ch.Send(ctx, channel.Outbound{Channel: d.Target, Thread: to, Content: text})
+		})
+	taskExecutor.Log = func(format string, args ...any) {
+		fmt.Fprintf(os.Stderr, "[tasks] "+format+"\n", args...)
+	}
+	if scheduleStore != nil {
+		builtinTools = append(builtinTools, tools.NewTaskTool(scheduleStore, taskExecutor))
+	}
 	if imsgCfg != nil || discordCfg != nil || telegramCfg != nil {
 		builtinTools = append(builtinTools, tools.NewSendFileTool(func(ctx context.Context, out channel.Outbound) error {
 			if channelsRef == nil {
@@ -388,10 +421,14 @@ func main() {
 		return nil
 	}
 	projectSkillsDir := filepath.Join(cwd, ".kroos", "skills")
-	skillWriteLogPath := filepath.Join(cwd, ".kroos", "logs", "skill_writes.log")
-	// skill_write is orchestrator-only — appended to allTools, not builtinTools,
-	// so subagents don't inherit it.
-	allTools = append(allTools, tools.NewSkillWriteTool(projectSkillsDir, skillWriteLogPath, reloadSkills))
+	skillLogPath := filepath.Join(cwd, ".kroos", "logs", "skill_writes.log")
+	// Skill tools are orchestrator-only — appended to allTools, not
+	// builtinTools, so subagents don't inherit them.
+	skillTools := []tools.Tool{
+		tools.NewSkillViewTool(skillsRegistry, filepath.Join(projectSkillsDir, ".usage.json")),
+		tools.NewSkillManageTool(projectSkillsDir, skillDirs, skillsRegistry, skillLogPath, reloadSkills),
+	}
+	allTools = append(allTools, skillTools...)
 
 	subagentManager, err := subagents.NewManager(
 		func(def subagents.Definition) (llm.ChatClient, error) {
@@ -443,26 +480,65 @@ func main() {
 	// Load IDENTITY.md and USER.md from agentDirs; last found wins (project overrides home).
 	contextFiles := loadContextFiles(agentDirs, "IDENTITY.md", "USER.md")
 
+	// Background agents get the builtins minus the task tool (no
+	// self-scheduling recursion), optionally narrowed per task.
+	var taskToolPool []tools.Tool
+	for _, t := range builtinTools {
+		if t.Definition().Name != "task" {
+			taskToolPool = append(taskToolPool, t)
+		}
+	}
+	taskFactory = func(t tasks.Task) (tasks.AgentSpec, error) {
+		client := chatClient
+		if t.Model != "" {
+			client = llm.NewClient(baseURL, t.Model, &llm.Options{Timeout: llmTimeout, APIKey: apiKey})
+		}
+		if t.Agent == cli.SkillReviewAgent {
+			return tasks.AgentSpec{Agent: cli.NewSkillReviewRunner(client, skillTools)}, nil
+		}
+		pool := taskToolPool
+		if len(t.Tools) > 0 {
+			pool = filterTools(pool, nameSet(t.Tools))
+		}
+		reg := tools.NewRegistry(pool...)
+		for _, h := range baseHooks {
+			reg.AddHook(h)
+		}
+		bg := &cli.Runner{
+			Client:       client,
+			Registry:     reg,
+			Skills:       skillsRegistry,
+			AgentID:      "task-" + t.ID,
+			AgentName:    t.Name,
+			Prompt:       agentPrompt,
+			ContextFiles: contextFiles,
+			MemoryStore:  memoryStore,
+		}
+		return tasks.AgentSpec{Agent: bg, System: bg.SystemPrompt(), Schemas: reg.Schemas()}, nil
+	}
+
 	var userActivity bool
 	runner := cli.Runner{
-		ImageInput:       envBool("KROOS_IMAGE_INPUT", true),
-		Client:           chatClient,
-		Registry:         registry,
-		Skills:           skillsRegistry,
-		AfterTurnHooks:   afterTurnHooks,
-		AgentStartHooks:  agentStartHooks,
-		AgentEndHooks:    agentEndHooks,
-		UsageHooks:       usageHooks,
-		PluginPrompts:    pluginPrompts,
-		AgentID:          "main",
-		AgentName:        "orchestrator",
-		Prompt:           agentPrompt,
-		ContextSize:      contextSize,
-		ContextFiles:     contextFiles,
-		MemoryStore:      memoryStore,
-		Scheduler:        scheduler,
-		Compaction:       compaction.DefaultSettings,
-		HeartbeatEnabled: hbCfg.Interval > 0,
+		ImageInput:          envBool("KROOS_IMAGE_INPUT", true),
+		Client:              chatClient,
+		Registry:            registry,
+		Skills:              skillsRegistry,
+		AfterTurnHooks:      afterTurnHooks,
+		AgentStartHooks:     agentStartHooks,
+		AgentEndHooks:       agentEndHooks,
+		UsageHooks:          usageHooks,
+		PluginPrompts:       pluginPrompts,
+		AgentID:             "main",
+		AgentName:           "orchestrator",
+		Prompt:              agentPrompt,
+		ContextSize:         contextSize,
+		ContextFiles:        contextFiles,
+		MemoryStore:         memoryStore,
+		Scheduler:           scheduler,
+		Compaction:          compaction.DefaultSettings,
+		HeartbeatEnabled:    hbCfg.Interval > 0,
+		SkillReviewInterval: envInt("KROOS_SKILL_REVIEW_INTERVAL", 10),
+		Tasks:               taskExecutor,
 		ClientForModel: func(m string) llm.ChatClient {
 			return llm.NewClient(baseURL, m, &llm.Options{
 				Timeout: llmTimeout,
@@ -579,6 +655,11 @@ func main() {
 			}
 			schedCh.Heartbeat = delivery
 		}
+		schedCh.RunTask = func(ev schedule.Event) {
+			if _, ok := taskExecutor.Submit(tasks.FromEvent(ev)); !ok {
+				fmt.Fprintf(os.Stderr, "[tasks] %q still running; skipped this fire\n", ev.Name)
+			}
+		}
 		channels.Register(schedCh)
 	}
 
@@ -689,6 +770,21 @@ func envDuration(name string, def time.Duration) time.Duration {
 // envBool returns the boolean value of the named env var, treating empty
 // or unset as def. Malformed values log a warning and fall back to def so
 // typos don't silently flip behavior.
+// envInt returns the integer value of the named env var, or def when
+// unset or malformed.
+func envInt(name string, def int) int {
+	v := strings.TrimSpace(os.Getenv(name))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: invalid %s=%q; using %d\n", name, v, def)
+		return def
+	}
+	return n
+}
+
 func envBool(name string, def bool) bool {
 	v := strings.TrimSpace(os.Getenv(name))
 	if v == "" {

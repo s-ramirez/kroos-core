@@ -19,6 +19,7 @@ import (
 	"github.com/s-ramirez/kroos-core/internal/prompt"
 	"github.com/s-ramirez/kroos-core/internal/schedule"
 	"github.com/s-ramirez/kroos-core/internal/skills"
+	"github.com/s-ramirez/kroos-core/internal/tasks"
 	"github.com/s-ramirez/kroos-core/internal/tools"
 	"github.com/s-ramirez/kroos-core/internal/types"
 )
@@ -91,6 +92,15 @@ type Runner struct {
 	// return. Read via ActiveMemoryStore so tools can route to the
 	// conversation-scoped store.
 	activeMemoryStore *memory.Store
+
+	// Tasks runs background work (skill reviews here; scheduled tasks
+	// via the sched channel and task tool).
+	Tasks *tasks.Executor
+
+	// SkillReviewInterval, when > 0, submits a background skill review to
+	// Tasks after this many tool calls accumulate (main agent only).
+	SkillReviewInterval int
+	skillReview         skillReviewState
 }
 
 // ActiveMemoryStore returns the memory store for the in-flight turn,
@@ -156,6 +166,11 @@ func (r *Runner) HandleTurn(ctx context.Context, conv *channel.Conversation, use
 			Role:    "system",
 			Content: r.buildSystemPromptWith(memStore),
 		})
+		conv.SkillsVersion = r.Skills.Version()
+	} else if v := r.Skills.Version(); v != conv.SkillsVersion && conv.Messages[0].Role == "system" {
+		// Skills changed (skill_manage or review) — refresh <available_skills>.
+		conv.Messages[0].Content = r.buildSystemPromptWith(memStore)
+		conv.SkillsVersion = v
 	}
 
 	conv.Messages = append(conv.Messages, types.Message{
@@ -181,6 +196,9 @@ func (r *Runner) HandleTurn(ctx context.Context, conv *channel.Conversation, use
 	conv.LastSummary = state.summary
 	conv.LastUsage = state.usage
 	conv.LastUsageIndex = state.usageIndex
+	if err == nil {
+		r.maybeReviewSkills(conv.Messages, toolSchemas, state)
+	}
 	return err
 }
 
@@ -191,6 +209,11 @@ type compactionState struct {
 	summary    string
 	usage      *types.Usage
 	usageIndex int
+
+	// toolCalls counts tool calls this turn; usedSkillManage notes that the
+	// agent already curated skills itself. Both feed the skill review.
+	toolCalls       int
+	usedSkillManage bool
 }
 
 // buildSystemPrompt assembles the system prompt from the runner's
@@ -221,6 +244,17 @@ func (r *Runner) buildSystemPromptWith(memStore *memory.Store) string {
 	pluginPrompts := r.composePluginPrompts()
 	return prompt.BuildSystemPrompt(r.Prompt, availableTools, r.Skills.Snapshot(), env, curated, pluginPrompts, r.ContextFiles...)
 }
+
+func jobModeOf(j schedule.Job) string {
+	if j.Mode == "" {
+		return schedule.ModeRemind
+	}
+	return j.Mode
+}
+
+// SystemPrompt returns the runner's system prompt (used by background
+// task factories that run isolated conversations).
+func (r *Runner) SystemPrompt() string { return r.buildSystemPrompt() }
 
 // composePluginPrompts returns plugin sections plus a synthesized
 // <scheduled_tasks> block describing currently-enabled user jobs.
@@ -255,8 +289,8 @@ func buildScheduledTasksSection(jobs []schedule.Job) string {
 	lines := []string{
 		"# Scheduled tasks",
 		"",
-		"These jobs are currently persisted and will fire as <scheduled_event> user messages.",
-		"Use the schedule tool to inspect, add, or remove jobs.",
+		"These jobs are persisted. Reminders fire here as <scheduled_event> user messages; tasks run in an isolated background agent and deliver their reply.",
+		"Use the task tool to inspect, add, remove, run, or review the history of jobs.",
 		"",
 		"<scheduled_tasks>",
 	}
@@ -270,6 +304,7 @@ func buildScheduledTasksSection(jobs []schedule.Job) string {
 			"  <task>",
 			fmt.Sprintf("    <id>%s</id>", j.ID),
 			fmt.Sprintf("    <name>%s</name>", j.Name),
+			fmt.Sprintf("    <mode>%s</mode>", jobModeOf(j)),
 			fmt.Sprintf("    <schedule>%s</schedule>", sched),
 			fmt.Sprintf("    <next-run>%s</next-run>", next),
 			fmt.Sprintf("    <text>%s</text>", j.Text),
@@ -466,6 +501,11 @@ func (r *Runner) agentLoop(
 					Content:    fmt.Sprintf("error: unknown tool %q", call.Function.Name),
 				})
 				continue
+			}
+
+			state.toolCalls++
+			if call.Function.Name == "skill_manage" {
+				state.usedSkillManage = true
 			}
 
 			rawArgs := json.RawMessage(call.Function.Arguments)

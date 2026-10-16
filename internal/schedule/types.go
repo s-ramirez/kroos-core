@@ -60,6 +60,16 @@ type Job struct {
 	LastRunAt *time.Time `json:"lastRunAt,omitempty"`
 	NextRunAt *time.Time `json:"nextRunAt,omitempty"`
 
+	// Mode is ModeRemind (default: Text is injected into the main
+	// conversation) or ModeTask (Text is a prompt run in an isolated
+	// background agent whose reply goes to Deliver).
+	Mode    string   `json:"mode,omitempty"`
+	Deliver Delivery `json:"deliver,omitempty"`
+	// Tools optionally restricts a task's tool allowlist; Model overrides
+	// its LLM model. Both ignored for reminders.
+	Tools []string `json:"tools,omitempty"`
+	Model string   `json:"model,omitempty"`
+
 	// Synthetic flags in-memory-only jobs (heartbeat). Never persisted.
 	Synthetic bool `json:"-"`
 }
@@ -72,6 +82,23 @@ type Event struct {
 	Name     string
 	Text     string
 	WakeMode string
+	Mode     string
+	Deliver  Delivery
+	Tools    []string
+	Model    string
+}
+
+const (
+	ModeRemind = "remind"
+	ModeTask   = "task"
+)
+
+// Delivery says where a task's reply goes. Target is cli | imessage |
+// discord | telegram | none; To is the chat/channel/handle for
+// messaging targets.
+type Delivery struct {
+	Target string `json:"target,omitempty"`
+	To     string `json:"to,omitempty"`
 }
 
 // Duration is a time.Duration that JSON-marshals as a human-readable string

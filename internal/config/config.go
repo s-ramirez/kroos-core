@@ -33,6 +33,7 @@ var Keys = []Key{
 	{"webui.port", "KROOS_WEBUI_PORT", "", "Enable web UI plugin on this port", false},
 	{"attachment_dir", "KROOS_ATTACHMENT_DIR", "", "Where channels save inbound media (default $TMPDIR/kroos-attachments)", false},
 	{"image_input", "KROOS_IMAGE_INPUT", "true", "Inline image attachments as vision input", false},
+	{"skills.review_interval", "KROOS_SKILL_REVIEW_INTERVAL", "10", "Tool calls between background skill reviews; 0 disables", false},
 	{"web_search.brave_api_key", "KROOS_BRAVE_API_KEY", "", "Brave Search API key", true},
 
 	{"heartbeat.interval", "KROOS_HEARTBEAT_INTERVAL", "", "Heartbeat interval (Go duration); empty disables", false},

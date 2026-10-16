@@ -56,6 +56,10 @@ type Conversation struct {
 	// MemoryStore, if non-nil, overrides the runner's default memory
 	// store for this conversation. Empty means use the runner default.
 	MemoryStore *memory.Store
+
+	// SkillsVersion is the skills.Registry version the system prompt was
+	// built against; the runner rebuilds the prompt when it changes.
+	SkillsVersion uint64
 }
 
 // persistedConversation is the JSON shape written to disk.

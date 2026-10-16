@@ -119,6 +119,10 @@ type Channel struct {
 	// pipeline (active-hours gating, HEARTBEAT_OK suppression, outbound
 	// routing, dedup) for events named "heartbeat".
 	Heartbeat *HeartbeatDelivery
+
+	// RunTask, if set, receives mode=task events instead of the bus:
+	// they run as isolated background tasks, not in Target's conversation.
+	RunTask func(schedule.Event)
 }
 
 func (c *Channel) Name() string { return Name }
@@ -137,6 +141,11 @@ func (c *Channel) Listen(ctx context.Context, out chan<- channel.Inbound) error 
 		case ev, ok := <-events:
 			if !ok {
 				return nil
+			}
+
+			if ev.Mode == schedule.ModeTask && c.RunTask != nil {
+				c.RunTask(ev)
+				continue
 			}
 
 			// Heartbeat-specific pre-flight: active-hours gate.

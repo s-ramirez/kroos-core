@@ -183,3 +183,14 @@ func parseFrontmatter(content string) (map[string]string, string) {
 
 	return fm, body
 }
+
+// ParseFrontmatter is the exported form of parseFrontmatter, used by
+// skill-authoring tools to validate SKILL.md content before writing.
+func ParseFrontmatter(content string) (map[string]string, string) {
+	return parseFrontmatter(content)
+}
+
+// ValidName reports whether name is a legal skill name.
+func ValidName(name string) bool {
+	return len(name) <= maxNameLen && namePattern.MatchString(name)
+}
