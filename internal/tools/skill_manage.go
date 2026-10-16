@@ -22,14 +22,18 @@ type SkillManageTool struct {
 	createDir string
 	roots     []string
 	registry  *skills.Registry
+	usage     *skills.Usage
 	logPath   string
 	reload    func() error
 	mu        sync.Mutex
 }
 
-func NewSkillManageTool(createDir string, roots []string, registry *skills.Registry, logPath string, reload func() error) *SkillManageTool {
-	return &SkillManageTool{createDir: createDir, roots: roots, registry: registry, logPath: logPath, reload: reload}
+func NewSkillManageTool(createDir string, roots []string, registry *skills.Registry, usage *skills.Usage, logPath string, reload func() error) *SkillManageTool {
+	return &SkillManageTool{createDir: createDir, roots: roots, registry: registry, usage: usage, logPath: logPath, reload: reload}
 }
+
+// ArchiveDir is where archived skills are moved (recoverable).
+func (t *SkillManageTool) ArchiveDir() string { return filepath.Join(t.createDir, ".archive") }
 
 const (
 	skillMaxDescriptionLen = 1024
@@ -44,7 +48,8 @@ var skillManageDefinition = ToolDefinition{
 	Description: "Create, update, or delete skills — your procedural memory for recurring task types. " +
 		"The call is an ordered operations array (a single edit is a list of one), applied atomically: any failure rolls every touched skill back. " +
 		"Ops: create (full SKILL.md text), patch (old_string/new_string — preferred; or content alone to replace SKILL.md wholesale), " +
-		"write_file/remove_file (supporting files under references/, templates/, scripts/, assets/), delete (must be the only op).",
+		"write_file/remove_file (supporting files under references/, templates/, scripts/, assets/), " +
+		"archive (move to .archive/, recoverable) and delete (each must be the only op), pin/unpin (exempt a skill from automatic curation).",
 	Guidelines: []string{
 		"After a non-trivial workflow (many tool calls, a tricky fix, a discovered procedure) or when the user corrects your approach, style, or format, record the lesson in the skill that governs that class of task.",
 		"Prefer patching a skill you loaded this session, then an existing broader skill, then adding references/<topic>.md under one; create a new skill only when no existing skill covers the class.",
@@ -63,7 +68,7 @@ var skillManageDefinition = ToolDefinition{
 					"type": "object",
 					"properties": map[string]any{
 						"name":         map[string]any{"type": "string"},
-						"action":       map[string]any{"type": "string", "enum": []string{"create", "patch", "write_file", "remove_file", "delete"}},
+						"action":       map[string]any{"type": "string", "enum": []string{"create", "patch", "write_file", "remove_file", "archive", "delete", "pin", "unpin"}},
 						"content":      map[string]any{"type": "string", "description": "create / patch: full SKILL.md text (frontmatter + body). For patch it REPLACES the whole file."},
 						"old_string":   map[string]any{"type": "string", "description": "patch: exact text to find."},
 						"new_string":   map[string]any{"type": "string", "description": "patch: replacement; empty deletes the match."},
@@ -108,8 +113,8 @@ func (t *SkillManageTool) Execute(_ context.Context, raw json.RawMessage) (ToolR
 		if !skills.ValidName(op.Name) {
 			return errorResultf("op %d: invalid skill name %q (lowercase alphanumeric with hyphens, max 64 chars)", i, op.Name), nil
 		}
-		if op.Action == "delete" && len(params.Operations) > 1 {
-			return errorResult("delete must be the only op in a call"), nil
+		if (op.Action == "delete" || op.Action == "archive") && len(params.Operations) > 1 {
+			return errorResultf("%s must be the only op in a call", op.Action), nil
 		}
 	}
 
@@ -140,8 +145,9 @@ func (t *SkillManageTool) Execute(_ context.Context, raw json.RawMessage) (ToolR
 	}
 
 	var summary []string
+	var post []func() error // usage-sidecar writes, applied only on success
 	for i, op := range params.Operations {
-		msg, err := t.apply(op, dirs[op.Name])
+		msg, err := t.apply(op, dirs[op.Name], &post)
 		if err != nil {
 			for _, b := range backups {
 				b.restore()
@@ -152,6 +158,11 @@ func (t *SkillManageTool) Execute(_ context.Context, raw json.RawMessage) (ToolR
 		t.appendLog(op)
 	}
 
+	for _, fn := range post {
+		if err := fn(); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: skill usage update failed: %v\n", err)
+		}
+	}
 	if t.reload != nil {
 		if err := t.reload(); err != nil {
 			return errorResultf("applied but reload failed: %v", err), nil
@@ -169,7 +180,7 @@ func (t *SkillManageTool) resolveDir(name string) string {
 	return filepath.Join(t.createDir, name)
 }
 
-func (t *SkillManageTool) apply(op SkillOp, dir string) (string, error) {
+func (t *SkillManageTool) apply(op SkillOp, dir string, post *[]func() error) (string, error) {
 	skillFile := filepath.Join(dir, "SKILL.md")
 	_, statErr := os.Stat(skillFile)
 	exists := statErr == nil
@@ -188,6 +199,7 @@ func (t *SkillManageTool) apply(op SkillOp, dir string) (string, error) {
 		if err := os.WriteFile(skillFile, []byte(op.Content), 0o644); err != nil {
 			return "", err
 		}
+		*post = append(*post, func() error { return t.usage.MarkCreated(op.Name) })
 		return fmt.Sprintf("created skill %q at %s", op.Name, skillFile), nil
 
 	case "patch":
@@ -269,17 +281,48 @@ func (t *SkillManageTool) apply(op SkillOp, dir string) (string, error) {
 		if !exists {
 			return "", fmt.Errorf("skill not found")
 		}
-		for _, root := range t.roots {
-			if filepath.Clean(root) == filepath.Clean(dir) {
-				return "", fmt.Errorf("refusing to delete skills root %s", dir)
-			}
+		if err := t.checkNotRoot(dir); err != nil {
+			return "", err
 		}
 		if err := os.RemoveAll(dir); err != nil {
 			return "", err
 		}
+		*post = append(*post, func() error { return t.usage.Delete(op.Name) })
 		return fmt.Sprintf("deleted skill %q", op.Name), nil
+
+	case "archive":
+		if !exists {
+			return "", fmt.Errorf("skill not found")
+		}
+		if err := t.checkNotRoot(dir); err != nil {
+			return "", err
+		}
+		dest, err := t.usage.Archive(op.Name, dir, t.ArchiveDir())
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("archived skill %q to %s", op.Name, dest), nil
+
+	case "pin", "unpin":
+		if !exists {
+			return "", fmt.Errorf("skill not found")
+		}
+		pinned := op.Action == "pin"
+		*post = append(*post, func() error {
+			return t.usage.Update(op.Name, func(e *skills.UsageEntry) { e.Pinned = pinned })
+		})
+		return fmt.Sprintf("%sned skill %q", op.Action, op.Name), nil
 	}
 	return "", fmt.Errorf("unknown action %q", op.Action)
+}
+
+func (t *SkillManageTool) checkNotRoot(dir string) error {
+	for _, root := range t.roots {
+		if filepath.Clean(root) == filepath.Clean(dir) {
+			return fmt.Errorf("refusing to remove skills root %s", dir)
+		}
+	}
+	return nil
 }
 
 // validateSkillMD checks frontmatter (name matches, one-line description)

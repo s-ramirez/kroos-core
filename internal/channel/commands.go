@@ -52,6 +52,9 @@ Do not ask the user questions — this is a background review.`
 // messages pass through untouched.
 type CommandExpander struct {
 	Skills *skills.Registry
+	// Usage, if set, records a use for each /skill: expansion so the
+	// curator doesn't treat command-only skills as idle.
+	Usage *skills.Usage
 }
 
 func (e *CommandExpander) Expand(input string) (string, error) {
@@ -76,6 +79,7 @@ func (e *CommandExpander) Expand(input string) (string, error) {
 			if err != nil {
 				return "", fmt.Errorf("reading skill %q: %w", name, err)
 			}
+			_ = e.Usage.Bump(name) // best-effort telemetry
 			result := string(content)
 			if args != "" {
 				result += "\n\n" + args

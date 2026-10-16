@@ -9,8 +9,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/s-ramirez/kroos-core/internal/skills"
 )
@@ -19,13 +17,12 @@ import (
 // files) or one support file, and bumps a usage counter in a sidecar
 // JSON file so skill activity can be tracked without touching SKILL.md.
 type SkillViewTool struct {
-	registry  *skills.Registry
-	usagePath string
-	mu        sync.Mutex
+	registry *skills.Registry
+	usage    *skills.Usage
 }
 
-func NewSkillViewTool(registry *skills.Registry, usagePath string) *SkillViewTool {
-	return &SkillViewTool{registry: registry, usagePath: usagePath}
+func NewSkillViewTool(registry *skills.Registry, usage *skills.Usage) *SkillViewTool {
+	return &SkillViewTool{registry: registry, usage: usage}
 }
 
 var skillViewDefinition = ToolDefinition{
@@ -82,7 +79,7 @@ func (t *SkillViewTool) Execute(_ context.Context, raw json.RawMessage) (ToolRes
 	if err != nil {
 		return errorResultf("read %s: %v", s.FilePath, err), nil
 	}
-	t.bump(s.Name)
+	_ = t.usage.Bump(s.Name) // best-effort: telemetry never fails a view
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "<skill name=%q dir=%q>\n%s\n</skill>", s.Name, dir, strings.TrimRight(string(data), "\n"))
@@ -110,37 +107,4 @@ func listSupportFiles(dir string) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-type skillUsage struct {
-	UseCount int       `json:"use_count"`
-	LastUsed time.Time `json:"last_used"`
-}
-
-// bump is best-effort: usage tracking must never fail a view.
-func (t *SkillViewTool) bump(name string) {
-	if t.usagePath == "" {
-		return
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	usage := map[string]skillUsage{}
-	if data, err := os.ReadFile(t.usagePath); err == nil {
-		_ = json.Unmarshal(data, &usage)
-	}
-	u := usage[name]
-	u.UseCount++
-	u.LastUsed = time.Now().UTC()
-	usage[name] = u
-	data, err := json.MarshalIndent(usage, "", "  ")
-	if err != nil {
-		return
-	}
-	if err := os.MkdirAll(filepath.Dir(t.usagePath), 0o755); err != nil {
-		return
-	}
-	tmp := t.usagePath + ".tmp"
-	if os.WriteFile(tmp, data, 0o644) == nil {
-		_ = os.Rename(tmp, t.usagePath)
-	}
 }

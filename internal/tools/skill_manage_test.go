@@ -14,6 +14,11 @@ import (
 const testSkillMD = "---\nname: meal-log\ndescription: Use when logging meals.\n---\n\n# Meal log\n\nAppend each meal.\n"
 
 func newSkillManageForTest(t *testing.T) (*SkillManageTool, *skills.Registry, string) {
+	tool, reg, dir, _ := newSkillManageWithUsage(t)
+	return tool, reg, dir
+}
+
+func newSkillManageWithUsage(t *testing.T) (*SkillManageTool, *skills.Registry, string, *skills.Usage) {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "skills")
 	reg := skills.NewRegistry(nil)
@@ -25,7 +30,8 @@ func newSkillManageForTest(t *testing.T) (*SkillManageTool, *skills.Registry, st
 		reg.Replace(loaded)
 		return nil
 	}
-	return NewSkillManageTool(dir, []string{dir}, reg, "", reload), reg, dir
+	usage := skills.NewUsage(filepath.Join(dir, ".usage.json"))
+	return NewSkillManageTool(dir, []string{dir}, reg, usage, "", reload), reg, dir, usage
 }
 
 func runSkillManage(t *testing.T, tool *SkillManageTool, ops ...SkillOp) ToolResult {
@@ -61,7 +67,7 @@ func TestSkillManageCreatePatchAndView(t *testing.T) {
 		t.Fatalf("patch not applied: %s", data)
 	}
 
-	view := NewSkillViewTool(reg, filepath.Join(dir, ".usage.json"))
+	view := NewSkillViewTool(reg, skills.NewUsage(filepath.Join(dir, ".usage.json")))
 	raw, _ := json.Marshal(SkillViewParams{Name: "meal-log"})
 	out, _ := view.Execute(context.Background(), raw)
 	if out.IsError || !strings.Contains(out.Output, "with kcal") || !strings.Contains(out.Output, "references/macros.md") {
@@ -118,5 +124,48 @@ func TestSkillManageValidation(t *testing.T) {
 	}
 	if res := runSkillManage(t, tool, SkillOp{Name: "meal-log", Action: "delete"}); res.IsError {
 		t.Errorf("delete: %s", res.Output)
+	}
+}
+
+func TestSkillManageProvenancePinAndArchive(t *testing.T) {
+	tool, reg, dir, usage := newSkillManageWithUsage(t)
+	runSkillManage(t, tool, SkillOp{Name: "meal-log", Action: "create", Content: testSkillMD})
+	if e := usage.Load()["meal-log"]; e.CreatedBy != skills.CreatedByAgent || e.CreatedAt == nil {
+		t.Fatalf("expected agent provenance, got %+v", e)
+	}
+
+	if res := runSkillManage(t, tool, SkillOp{Name: "meal-log", Action: "pin"}); res.IsError {
+		t.Fatal(res.Output)
+	}
+	if !usage.Load()["meal-log"].Pinned {
+		t.Fatal("expected pinned")
+	}
+
+	if res := runSkillManage(t, tool, SkillOp{Name: "meal-log", Action: "archive"}); res.IsError {
+		t.Fatal(res.Output)
+	}
+	if _, ok := reg.Find("meal-log"); ok {
+		t.Fatal("archived skill should not be loaded")
+	}
+	entries, _ := os.ReadDir(filepath.Join(dir, ".archive"))
+	if len(entries) != 1 || !strings.HasPrefix(entries[0].Name(), "meal-log-") {
+		t.Fatalf("expected archived dir, got %v", entries)
+	}
+	if usage.Load()["meal-log"].State != skills.StateArchived {
+		t.Fatal("expected archived state")
+	}
+}
+
+func TestSkillManageFailedBatchSkipsUsageWrites(t *testing.T) {
+	tool, _, _, usage := newSkillManageWithUsage(t)
+	res := runSkillManage(t, tool,
+		SkillOp{Name: "meal-log", Action: "create", Content: testSkillMD},
+		SkillOp{Name: "meal-log", Action: "patch", OldString: "nope", NewString: "x"},
+	)
+	if !res.IsError {
+		t.Fatal("expected failure")
+	}
+	if _, ok := usage.Load()["meal-log"]; ok {
+		t.Fatal("usage should not record a rolled-back create")
 	}
 }

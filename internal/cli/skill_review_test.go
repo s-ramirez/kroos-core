@@ -28,3 +28,36 @@ func TestReadBeforeWriteHook(t *testing.T) {
 		t.Fatal("expected delete blocked")
 	}
 }
+
+func TestCuratorHookScopeAndArchive(t *testing.T) {
+	h := newReadBeforeWriteHook()
+	h.allowArchive = true
+	h.scope = map[string]bool{"a": true}
+	mk := func(op tools.SkillOp) json.RawMessage {
+		raw, _ := json.Marshal(tools.SkillManageParams{Operations: []tools.SkillOp{op}})
+		return raw
+	}
+	if r := h.BeforeToolCall(tools.HookContext{}, "skill_manage", mk(tools.SkillOp{Name: "a", Action: "archive"})); r != "" {
+		t.Fatalf("archive of candidate should pass, got %q", r)
+	}
+	if h.BeforeToolCall(tools.HookContext{}, "skill_manage", mk(tools.SkillOp{Name: "other", Action: "archive"})) == "" {
+		t.Fatal("non-candidate should be blocked")
+	}
+	if r := h.BeforeToolCall(tools.HookContext{}, "skill_manage", mk(tools.SkillOp{Name: "umbrella", Action: "create"})); r != "" {
+		t.Fatalf("create of umbrella should pass, got %q", r)
+	}
+	if h.BeforeToolCall(tools.HookContext{}, "skill_manage", mk(tools.SkillOp{Name: "a", Action: "pin"})) == "" {
+		t.Fatal("pin should be blocked")
+	}
+}
+
+func TestCuratorHookKeepsNewUmbrellaInScope(t *testing.T) {
+	h := newReadBeforeWriteHook()
+	h.scope = map[string]bool{}
+	create, _ := json.Marshal(tools.SkillManageParams{Operations: []tools.SkillOp{{Name: "umbrella", Action: "create"}}})
+	h.AfterToolCall(tools.HookContext{}, "skill_manage", create, tools.ToolResult{}, nil)
+	patch, _ := json.Marshal(tools.SkillManageParams{Operations: []tools.SkillOp{{Name: "umbrella", Action: "patch", OldString: "a", NewString: "b"}}})
+	if r := h.BeforeToolCall(tools.HookContext{}, "skill_manage", patch); r != "" {
+		t.Fatalf("patch of new umbrella should pass, got %q", r)
+	}
+}

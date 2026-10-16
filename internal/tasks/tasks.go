@@ -66,6 +66,9 @@ type AgentSpec struct {
 	Agent   Agent
 	System  string
 	Schemas []types.ChatRequestTool
+	// Prompt, if set, replaces Task.Prompt (for factories that compute
+	// the prompt at run time, e.g. the curator's candidate list).
+	Prompt string
 }
 
 // Factory builds the isolated agent for a task.
@@ -147,7 +150,7 @@ func (e *Executor) Wait() { e.wg.Wait() }
 
 // FromEvent converts a fired mode=task schedule event into a Task.
 func FromEvent(ev schedule.Event) Task {
-	return Task{ID: ev.JobID, Name: ev.Name, Prompt: ev.Text, Tools: ev.Tools, Model: ev.Model, Deliver: ev.Deliver}
+	return Task{ID: ev.JobID, Name: ev.Name, Agent: ev.Agent, Prompt: ev.Text, Tools: ev.Tools, Model: ev.Model, Deliver: ev.Deliver}
 }
 
 func (e *Executor) run(runID string, t Task) {
@@ -178,6 +181,9 @@ func (e *Executor) run(runID string, t Task) {
 		rec.Status, rec.Error = "error", err.Error()
 		e.logf("task %q: %v", t.Name, err)
 		return
+	}
+	if spec.Prompt != "" {
+		t.Prompt = spec.Prompt
 	}
 	schemas := spec.Schemas
 	if t.Schemas != nil {
@@ -356,5 +362,5 @@ func firstNonEmpty(a, b string) string {
 
 // FromJob converts a persisted mode=task job into a Task (run_now).
 func FromJob(j schedule.Job) Task {
-	return Task{ID: j.ID, Name: j.Name, Prompt: j.Text, Tools: j.Tools, Model: j.Model, Deliver: j.Deliver}
+	return Task{ID: j.ID, Name: j.Name, Agent: j.Agent, Prompt: j.Text, Tools: j.Tools, Model: j.Model, Deliver: j.Deliver}
 }

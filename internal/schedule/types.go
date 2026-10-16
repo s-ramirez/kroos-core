@@ -69,6 +69,9 @@ type Job struct {
 	// its LLM model. Both ignored for reminders.
 	Tools []string `json:"tools,omitempty"`
 	Model string   `json:"model,omitempty"`
+	// Agent selects a built-in task agent kind (e.g. "curator"); empty
+	// is the general background agent.
+	Agent string `json:"agent,omitempty"`
 	// ActiveHours, if set, drops fires outside the window.
 	ActiveHours *ActiveHours `json:"activeHours,omitempty"`
 
@@ -88,6 +91,7 @@ type Event struct {
 	Deliver     Delivery
 	Tools       []string
 	Model       string
+	Agent       string
 	ActiveHours *ActiveHours
 }
 

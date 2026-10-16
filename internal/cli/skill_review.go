@@ -86,10 +86,14 @@ func NewSkillReviewRunner(client llm.ChatClient, reviewTools []tools.Tool) *Runn
 	return &Runner{Client: client, Registry: reg, AgentID: SkillReviewAgent, AgentName: SkillReviewAgent}
 }
 
-// readBeforeWriteHook blocks review-fork patches to skills it has not
-// loaded via skill_view during the review, and blocks deletes outright.
+// readBeforeWriteHook guards background skill writers: patches and file
+// removals require a skill_view of that file during this run; delete,
+// pin, and unpin are always blocked; archive needs allowArchive. When
+// scope is non-nil, every op except create must target a name in it.
 type readBeforeWriteHook struct {
-	viewed map[string]bool
+	viewed       map[string]bool
+	allowArchive bool
+	scope        map[string]bool
 }
 
 func newReadBeforeWriteHook() *readBeforeWriteHook {
@@ -112,9 +116,16 @@ func (h *readBeforeWriteHook) BeforeToolCall(_ tools.HookContext, name string, p
 		return ""
 	}
 	for _, op := range p.Operations {
+		if h.scope != nil && op.Action != "create" && !h.scope[op.Name] {
+			return fmt.Sprintf("skill %q is not a curation candidate; only candidates may be modified", op.Name)
+		}
 		switch op.Action {
-		case "delete":
-			return "background review must not delete skills"
+		case "delete", "pin", "unpin":
+			return fmt.Sprintf("background runs must not %s skills", op.Action)
+		case "archive":
+			if !h.allowArchive {
+				return "background review must not archive skills"
+			}
 		case "patch", "remove_file":
 			if !h.viewed[viewKey(op.Name, op.FilePath)] {
 				return fmt.Sprintf("call skill_view(name=%q, file_path=%q) first, then retry once", op.Name, op.FilePath)
@@ -140,6 +151,9 @@ func (h *readBeforeWriteHook) AfterToolCall(_ tools.HookContext, name string, pa
 		if json.Unmarshal(params, &p) == nil {
 			for _, op := range p.Operations {
 				h.viewed[viewKey(op.Name, op.FilePath)] = true
+				if op.Action == "create" && h.scope != nil {
+					h.scope[op.Name] = true // a new umbrella stays editable
+				}
 			}
 		}
 	}

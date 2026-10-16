@@ -424,10 +424,18 @@ func main() {
 	skillLogPath := filepath.Join(cwd, ".kroos", "logs", "skill_writes.log")
 	// Skill tools are orchestrator-only — appended to allTools, not
 	// builtinTools, so subagents don't inherit them.
-	skillTools := []tools.Tool{
-		tools.NewSkillViewTool(skillsRegistry, filepath.Join(projectSkillsDir, ".usage.json")),
-		tools.NewSkillManageTool(projectSkillsDir, skillDirs, skillsRegistry, skillLogPath, reloadSkills),
+	skillUsage := skills.NewUsage(filepath.Join(projectSkillsDir, ".usage.json"))
+	skillManage := tools.NewSkillManageTool(projectSkillsDir, skillDirs, skillsRegistry, skillUsage, skillLogPath, reloadSkills)
+	skillTools := []tools.Tool{tools.NewSkillViewTool(skillsRegistry, skillUsage), skillManage}
+	curatorCfg := cli.CuratorConfig{
+		Usage:        skillUsage,
+		Registry:     skillsRegistry,
+		ArchiveDir:   skillManage.ArchiveDir(),
+		StaleAfter:   envDuration("KROOS_SKILL_STALE_AFTER", 30*24*time.Hour),
+		ArchiveAfter: envDuration("KROOS_SKILL_ARCHIVE_AFTER", 90*24*time.Hour),
+		Reload:       reloadSkills,
 	}
+	registerCurator(scheduler, taskExecutor, envDuration("KROOS_SKILL_CURATOR_INTERVAL", 7*24*time.Hour))
 	allTools = append(allTools, skillTools...)
 
 	subagentManager, err := subagents.NewManager(
@@ -493,8 +501,11 @@ func main() {
 		if t.Model != "" {
 			client = llm.NewClient(baseURL, t.Model, &llm.Options{Timeout: llmTimeout, APIKey: apiKey})
 		}
-		if t.Agent == cli.SkillReviewAgent {
+		switch t.Agent {
+		case cli.SkillReviewAgent:
 			return tasks.AgentSpec{Agent: cli.NewSkillReviewRunner(client, skillTools)}, nil
+		case cli.CuratorAgent:
+			return cli.BuildCurator(client, skillTools, curatorCfg)
 		}
 		pool := taskToolPool
 		if len(t.Tools) > 0 {
@@ -630,7 +641,7 @@ func main() {
 	dispatcher := &channel.Dispatcher{
 		Channels:    channels,
 		Store:       convStore,
-		Commands:    &channel.CommandExpander{Skills: skillsRegistry},
+		Commands:    &channel.CommandExpander{Skills: skillsRegistry, Usage: skillUsage},
 		Handler:     &channel.Router{Default: &runner, Routes: routes},
 		OnUserInput: func() { userActivity = true },
 		Logger: func(format string, args ...any) {
@@ -718,6 +729,33 @@ func envDuration(name string, def time.Duration) time.Duration {
 // envBool returns the boolean value of the named env var, treating empty
 // or unset as def. Malformed values log a warning and fall back to def so
 // typos don't silently flip behavior.
+// registerCurator injects the weekly skill-curator task. Its first fire
+// is anchored to the last recorded run so frequent restarts (auto-deploy)
+// don't keep pushing it back.
+func registerCurator(scheduler *schedule.Scheduler, exec *tasks.Executor, interval time.Duration) {
+	if scheduler == nil || interval <= 0 {
+		return
+	}
+	now := time.Now()
+	anchor := now.Add(interval)
+	if runs := exec.History(cli.CuratorAgent, 1); len(runs) > 0 {
+		anchor = runs[0].FinishedAt.Add(interval)
+	}
+	if anchor.Before(now) {
+		anchor = now.Add(5 * time.Minute)
+	}
+	scheduler.Inject(schedule.Job{
+		ID:       cli.CuratorAgent,
+		Name:     "skill-curator",
+		Enabled:  true,
+		Mode:     schedule.ModeTask,
+		Agent:    cli.CuratorAgent,
+		Deliver:  schedule.Delivery{Target: "none"},
+		Text:     "Curate the skill library.",
+		Schedule: schedule.Schedule{Kind: schedule.KindEvery, Every: schedule.Duration(interval), Anchor: &anchor},
+	})
+}
+
 // envInt returns the integer value of the named env var, or def when
 // unset or malformed.
 func envInt(name string, def int) int {

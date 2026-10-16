@@ -99,3 +99,22 @@ func TestParseResetCommand(t *testing.T) {
 		}
 	}
 }
+
+func TestCommandExpanderRecordsSkillUsage(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "SKILL.md")
+	if err := os.WriteFile(path, []byte("skill body"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	usage := skills.NewUsage(filepath.Join(dir, ".usage.json"))
+	e := &CommandExpander{
+		Skills: skills.NewRegistry([]skills.Skill{{Name: "review", FilePath: path}}),
+		Usage:  usage,
+	}
+	if _, err := e.Expand("/skill:review"); err != nil {
+		t.Fatal(err)
+	}
+	if got := usage.Load()["review"]; got.UseCount != 1 || got.LastUsed == nil {
+		t.Fatalf("expected one recorded use, got %+v", got)
+	}
+}
