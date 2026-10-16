@@ -1,11 +1,10 @@
 ---
 name: gpt
-description: Delegate to OpenAI GPT for tasks needing strong general reasoning.
+description: Delegate to ChatGPT for tasks needing strong general reasoning.
 when_to_use: Use when the parent agent needs a second opinion from a hosted frontier model, or when local models are struggling with reasoning-heavy tasks.
-model: gpt-4.1
-base_url: https://api.openai.com
-api_key_env: OPENAI_API_KEY
-context_size: 1047576
+model: gpt-5.4
+provider: chatgpt
+context_size: 400000
 tools: [read, grep, ls, find]
 plugins: []
 ---

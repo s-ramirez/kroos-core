@@ -96,8 +96,7 @@ func loadDefinitionFile(path string) (*Definition, []string, error) {
 		diagnostics = append(diagnostics, fmt.Sprintf("%s: model is required", path))
 	}
 
-	baseURL := strings.TrimSpace(frontmatter["base_url"])
-	apiKeyEnv := strings.TrimSpace(frontmatter["api_key_env"])
+	provider := strings.TrimSpace(frontmatter["provider"])
 
 	contextSize, ctxErr := parseContextSizeField(frontmatter["context_size"])
 	if ctxErr != nil {
@@ -124,8 +123,7 @@ func loadDefinitionFile(path string) (*Definition, []string, error) {
 		Description: description,
 		WhenToUse:   whenToUse,
 		Model:       model,
-		BaseURL:     baseURL,
-		APIKeyEnv:   apiKeyEnv,
+		Provider:    provider,
 		ContextSize: contextSize,
 		Tools:       tools,
 		Plugins:     plugins,

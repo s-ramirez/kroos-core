@@ -73,8 +73,9 @@ func runInit(args []string) error {
 	}
 
 	fmt.Fprintln(out, "\n== LLM ==")
-	fmt.Fprintln(out, "The default agent uses OPENAI_API_KEY. Leave blank to configure manually later.")
-	ask("OPENAI_API_KEY", "OpenAI API key", "")
+	fmt.Fprintln(out, "Default provider is ChatGPT: run `kroos login` after init.")
+	fmt.Fprintln(out, "oMLX key (for --provider omlx / local subagent). Leave blank to set later.")
+	ask("KROOS_OMLX_API_KEY", "oMLX API key", "")
 
 	fmt.Fprintln(out, "\n== Web UI ==")
 	if promptYesNo(reader, out, "Enable embedded web UI?", false) {

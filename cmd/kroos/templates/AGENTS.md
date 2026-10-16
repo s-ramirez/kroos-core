@@ -1,7 +1,6 @@
 ---
 model: gpt-5.4
-base_url: https://api.openai.com
-api_key_env: OPENAI_API_KEY
+provider: chatgpt
 context_size: 400000
 tools: ["*"]
 ---
@@ -44,7 +43,7 @@ tools: ["*"]
 
 ## Environment Variables
 
-- Core: `KROOS_BASE_URL` (default `https://api.openai.com`), `KROOS_MODEL` (default `gpt-5.4`), `KROOS_API_KEY` (optional bearer), `KROOS_LLM_TIMEOUT` (default `5m`), `KROOS_SUBAGENT_LLM_TIMEOUT` (default: same as `KROOS_LLM_TIMEOUT`), `KROOS_WEBUI_PORT`, `KROOS_LOG_DIR`, `KROOS_HEARTBEAT_INTERVAL`.
+- Core: `KROOS_PROVIDER` (`chatgpt` default | `omlx`), `KROOS_MODEL` (default `gpt-5.4`), `KROOS_OMLX_URL`, `KROOS_OMLX_API_KEY`, `KROOS_LLM_TIMEOUT` (default `5m`), `KROOS_SUBAGENT_LLM_TIMEOUT` (default: same as `KROOS_LLM_TIMEOUT`), `KROOS_WEBUI_PORT`, `KROOS_LOG_DIR`, `KROOS_HEARTBEAT_INTERVAL`.
 - iMessage (BlueBubbles): `BLUEBUBBLES_ENABLED`, `BLUEBUBBLES_SERVER_URL`, `BLUEBUBBLES_PASSWORD`, `BLUEBUBBLES_WEBHOOK_PORT`, `BLUEBUBBLES_WEBHOOK_PATH`, `BLUEBUBBLES_ALLOWED_USERS`, `BLUEBUBBLES_GROUP_TAG`.
 - Discord: `DISCORD_ENABLED`, `DISCORD_BOT_TOKEN`, `DISCORD_ALLOWED_USERS`, `DISCORD_GUILD_TAG`.
 - Web search: `KROOS_BRAVE_API_KEY` or `BRAVE_API_KEY`.

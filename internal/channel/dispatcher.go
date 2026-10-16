@@ -27,12 +27,15 @@ type TurnHandler interface {
 // channels. This matches the project's single-LLM-backend assumption.
 // Add per-conversation workers later if parallelism is needed.
 type Dispatcher struct {
-	Channels    *Registry
-	Store       *Store
-	Commands    *CommandExpander
-	Handler     TurnHandler
-	OnUserInput func()
-	Logger      func(format string, args ...any)
+	Channels *Registry
+	Store    *Store
+	Commands *CommandExpander
+	// ModelCommand, if set, handles "/model [args]" for the conversation and
+	// returns the reply text.
+	ModelCommand func(ctx context.Context, conv *Conversation, args string) string
+	Handler      TurnHandler
+	OnUserInput  func()
+	Logger       func(format string, args ...any)
 }
 
 // Run starts listeners for every registered channel and blocks until
@@ -91,6 +94,16 @@ func (d *Dispatcher) process(ctx context.Context, in Inbound) {
 			return
 		}
 		in.Content = tail
+	}
+
+	if args, ok := parseModelCommand(in.Content); ok && d.ModelCommand != nil {
+		key := Key{Channel: in.Channel, Thread: in.Thread}
+		out := d.ModelCommand(ctx, d.Store.Get(key), args)
+		if err := d.Store.Save(key); err != nil {
+			d.logf("save conversation %s/%s: %v", in.Channel, in.Thread, err)
+		}
+		d.replyText(ctx, in.Channel, in.Thread, out)
+		return
 	}
 
 	content := in.Content

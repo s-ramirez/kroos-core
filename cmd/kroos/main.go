@@ -46,6 +46,23 @@ func main() {
 		return
 	}
 
+	if len(os.Args) > 1 && (os.Args[1] == "login" || os.Args[1] == "logout") {
+		if err := runLogin(os.Args[1], os.Args[2:], os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", os.Args[1], err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "models" {
+		loadEnvAndConfig()
+		if err := runModels(os.Args[2:], os.Stdin, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "models: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	if len(os.Args) > 1 && os.Args[1] == "config" {
 		loadEnvAndConfig()
 		if err := runConfig(os.Args[2:], os.Stdout); err != nil {
@@ -65,17 +82,13 @@ func main() {
 	}
 	loadEnvAndConfig()
 
-	baseURL := os.Getenv("KROOS_BASE_URL")
-	if baseURL == "" {
-		baseURL = "https://api.openai.com"
-	}
+	providers := newProvidersFromEnv()
+	provider := providers.Default
 
 	model := os.Getenv("KROOS_MODEL")
 	if model == "" {
 		model = "gpt-5.4"
 	}
-
-	apiKey := os.Getenv("KROOS_API_KEY")
 
 	cwd, _ := os.Getwd()
 	home, _ := os.UserHomeDir()
@@ -89,37 +102,29 @@ func main() {
 		os.Exit(1)
 	}
 	if agentCfg != nil {
-		baseURL = agentCfg.BaseURL
-		if baseURL == "" {
-			baseURL = os.Getenv("KROOS_BASE_URL")
-			if baseURL == "" {
-				baseURL = "https://api.openai.com"
-			}
+		if agentCfg.Provider != "" {
+			provider = agentCfg.Provider
 		}
 		model = agentCfg.Model
-		apiKey = ""
-		if agentCfg.APIKeyEnv != "" {
-			apiKey = os.Getenv(agentCfg.APIKeyEnv)
-		}
 		// CLI flags beat the agent config file.
-		if explicit["base_url"] {
-			baseURL = os.Getenv("KROOS_BASE_URL")
+		if explicit["provider"] {
+			provider = os.Getenv("KROOS_PROVIDER")
 		}
 		if explicit["model"] {
 			model = os.Getenv("KROOS_MODEL")
-		}
-		if explicit["api_key"] {
-			apiKey = os.Getenv("KROOS_API_KEY")
 		}
 	}
 
 	llmTimeout := envDuration("KROOS_LLM_TIMEOUT", 300*time.Second)
 	subagentLLMTimeout := envDuration("KROOS_SUBAGENT_LLM_TIMEOUT", llmTimeout)
 
-	client := llm.NewClient(baseURL, model, &llm.Options{
-		Timeout: llmTimeout,
-		APIKey:  apiKey,
-	})
+	// Subagents/profiles/tasks without a provider follow the main agent's.
+	providers.Default = provider
+	client, err := providers.New(provider, model, llmTimeout)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
 
 	var chatClient llm.ChatClient = client
 	var sessionDir string
@@ -450,18 +455,7 @@ func main() {
 
 	subagentManager, err := subagents.NewManager(
 		func(def subagents.Definition) (llm.ChatClient, error) {
-			u := def.BaseURL
-			if u == "" {
-				u = baseURL
-			}
-			key := apiKey
-			if def.APIKeyEnv != "" {
-				key = os.Getenv(def.APIKeyEnv)
-			}
-			return llm.NewClient(u, def.Model, &llm.Options{
-				Timeout: subagentLLMTimeout,
-				APIKey:  key,
-			}), nil
+			return providers.New(def.Provider, def.Model, subagentLLMTimeout)
 		},
 		sessionDir,
 		defs,
@@ -509,7 +503,11 @@ func main() {
 	taskFactory = func(t tasks.Task) (tasks.AgentSpec, error) {
 		client := chatClient
 		if t.Model != "" {
-			client = llm.NewClient(baseURL, t.Model, &llm.Options{Timeout: llmTimeout, APIKey: apiKey})
+			c, err := providers.New("", t.Model, llmTimeout)
+			if err != nil {
+				return tasks.AgentSpec{}, err
+			}
+			client = c
 		}
 		switch t.Agent {
 		case cli.SkillReviewAgent:
@@ -561,6 +559,8 @@ func main() {
 		Tasks:               taskExecutor,
 	}
 
+	clientFor := func(prov, m string) (llm.ChatClient, error) { return providers.New(prov, m, llmTimeout) }
+	runner.ClientFor = clientFor
 	runnerRef = &runner
 
 	routes := make(map[channel.Key]channel.TurnHandler)
@@ -574,16 +574,14 @@ func main() {
 			if def.Model == "" {
 				return chatClient
 			}
-			u := def.BaseURL
-			if u == "" {
-				u = baseURL
+			c, err := providers.New(def.Provider, def.Model, llmTimeout)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "warning: profile %q: %v; using main client\n", def.Name, err)
+				return chatClient
 			}
-			key := apiKey
-			if def.APIKeyEnv != "" {
-				key = os.Getenv(def.APIKeyEnv)
-			}
-			return llm.NewClient(u, def.Model, &llm.Options{Timeout: llmTimeout, APIKey: key})
+			return c
 		})
+		pr.ClientFor = clientFor
 		for _, t := range p.Threads {
 			routes[channel.Key{Channel: p.Channel, Thread: t}] = pr
 		}
@@ -660,11 +658,12 @@ func main() {
 	}
 
 	dispatcher := &channel.Dispatcher{
-		Channels:    channels,
-		Store:       convStore,
-		Commands:    &channel.CommandExpander{Skills: skillsRegistry, Usage: skillUsage},
-		Handler:     &channel.Router{Default: &runner, Routes: routes},
-		OnUserInput: func() { userActivity = true },
+		Channels:     channels,
+		Store:        convStore,
+		Commands:     &channel.CommandExpander{Skills: skillsRegistry, Usage: skillUsage},
+		ModelCommand: sessionModelCommand(providers, modelChoice{provider, model}),
+		Handler:      &channel.Router{Default: &runner, Routes: routes},
+		OnUserInput:  func() { userActivity = true },
 		Logger: func(format string, args ...any) {
 			fmt.Fprintf(os.Stderr, "[dispatcher] "+format+"\n", args...)
 		},
@@ -965,4 +964,11 @@ func formatParams(params json.RawMessage) string {
 		return formatted[:160] + "..."
 	}
 	return formatted
+}
+
+func envOr(name, def string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+	return def
 }

@@ -34,9 +34,10 @@ Available settings:
 
 | Variable            | Default                     | Description                                           |
 |---------------------|-----------------------------|-------------------------------------------------------|
-| `KROOS_BASE_URL`      | `https://api.openai.com`    | Base URL of the chat completions API                  |
+| `KROOS_PROVIDER`      | `chatgpt`                   | `chatgpt` (subscription, `kroos login`) or `omlx`     |
 | `KROOS_MODEL`         | `gpt-5.4`                   | Model name to use in API requests                     |
-| `KROOS_API_KEY`       | unset                       | Optional bearer token for authenticated APIs          |
+| `KROOS_OMLX_URL`      | `http://100.111.194.53:8000`| oMLX server (chat completions)                        |
+| `KROOS_OMLX_API_KEY`  | unset                       | oMLX API key                                          |
 | `KROOS_LLM_TIMEOUT`   | `5m`                        | Timeout for primary and heartbeat LLM requests        |
 | `KROOS_SUBAGENT_LLM_TIMEOUT` | `KROOS_LLM_TIMEOUT` | Timeout for sub-agent LLM requests                    |
 | `KROOS_WEBUI_PORT`    | `8420`                      | Enables the web UI plugin on the given port           |
@@ -44,46 +45,37 @@ Available settings:
 | `KROOS_BRAVE_API_KEY` | unset                       | Brave Search API key for the `web_search` tool        |
 | `BRAVE_API_KEY`     | unset                       | Alternate Brave Search API key env var                |
 
-Example with a custom endpoint:
+ChatGPT (default): sign in once with your ChatGPT account, then run.
 
 ```sh
-KROOS_BASE_URL=http://localhost:8080 KROOS_MODEL=my-model go run ./cmd/kroos
-```
-
-Example with OpenAI:
-
-```sh
-KROOS_BASE_URL=https://api.openai.com \
-KROOS_MODEL=gpt-4o-mini \
-KROOS_API_KEY=your-openai-api-key \
+go run ./cmd/kroos login      # device-code flow; tokens in ~/.kroos/auth.json
 go run ./cmd/kroos
 ```
 
-## Multi-provider sub-agents
+oMLX:
 
-Each sub-agent under `.kroos/subagents/` or `~/.kroos/subagents/` can target its
-own provider via three frontmatter fields:
-
-| Field         | Description                                                              |
-|---------------|--------------------------------------------------------------------------|
-| `model`       | Model name passed to the API verbatim                                    |
-| `base_url`    | API base URL (the client appends `/v1/chat/completions`)                 |
-| `api_key_env` | Name of an env var holding the API key (resolved at spawn time)          |
-
-If `base_url` is omitted, the global `KROOS_BASE_URL` is used. If `api_key_env`
-is set but the env var is empty, no `Authorization` header is sent. Put
-secrets in `.env` and reference them by env var name —
-never commit keys.
-
-Example sub-agents shipped in `.kroos/subagents/`: `gpt.md` (OpenAI),
-`fireworks.md` (Fireworks), `local.md` (OMLX).
-
-`.env`:
-
-```env
-OPENAI_API_KEY=sk-...
-FIREWORKS_API_KEY=fw-...
+```sh
+kroos config set omlx.api_key <key>
+kroos --provider omlx --model mlx-community/gemma-4-12B-it-8bit
 ```
+
+Models: `kroos models` lists what each provider offers; `kroos models select`
+picks one and saves it. Inside a session, `/model` lists models and
+`/model <number|name|provider:model>` switches the current conversation
+(`/model default` reverts).
+
+## Sub-agent providers
+
+Each sub-agent under `.kroos/subagents/` or `~/.kroos/subagents/` picks its
+provider with frontmatter:
+
+| Field      | Description                                                 |
+|------------|-------------------------------------------------------------|
+| `model`    | Model name passed to the API verbatim                       |
+| `provider` | `chatgpt` or `omlx`; omitted = the main agent's provider    |
+
+Example sub-agents shipped in `.kroos/subagents/`: `gpt.md` (ChatGPT),
+`local.md` (oMLX).
 
 ## Customizing the main agent
 
@@ -92,14 +84,13 @@ orchestrator. Same frontmatter as sub-agents, plus the body becomes a
 `# Personality` section appended to the auto-built system prompt.
 
 `tools` and `model` are required. `tools` filters the available builtin and
-plugin tools; `plugins` (optional) restricts which plugins load. When
-`api_key_env` is omitted, the main agent sends no `Authorization` header.
+plugin tools; `plugins` (optional) restricts which plugins load. `provider`
+(optional) overrides `KROOS_PROVIDER`.
 
 ```yaml
 ---
-model: gpt-4.1
-base_url: https://api.openai.com
-api_key_env: OPENAI_API_KEY
+model: gpt-5.4
+provider: chatgpt
 tools: [read, write, edit, bash, grep, ls, find]
 plugins: [webui]
 ---

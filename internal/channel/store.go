@@ -56,6 +56,11 @@ type Conversation struct {
 	// SkillsVersion is the skills.Registry version the system prompt was
 	// built against; the runner rebuilds the prompt when it changes.
 	SkillsVersion uint64
+
+	// Provider/Model, if Model is set, override the runner's client for
+	// this conversation (set via /model). Empty Provider = default provider.
+	Provider string
+	Model    string
 }
 
 // persistedConversation is the JSON shape written to disk.
@@ -65,6 +70,8 @@ type persistedConversation struct {
 	LastSummary    string          `json:"last_summary,omitempty"`
 	LastUsage      *types.Usage    `json:"last_usage,omitempty"`
 	LastUsageIndex int             `json:"last_usage_index"`
+	Provider       string          `json:"provider,omitempty"`
+	Model          string          `json:"model,omitempty"`
 }
 
 // Store manages in-memory conversations plus optional on-disk
@@ -138,6 +145,8 @@ func (s *Store) Save(key Key) error {
 		LastSummary:    conv.LastSummary,
 		LastUsage:      conv.LastUsage,
 		LastUsageIndex: conv.LastUsageIndex,
+		Provider:       conv.Provider,
+		Model:          conv.Model,
 	}, "", "  ")
 	if err != nil {
 		return err
@@ -189,6 +198,8 @@ func (s *Store) loadHistory(conv *Conversation) {
 	conv.LastSummary = p.LastSummary
 	conv.LastUsage = p.LastUsage
 	conv.LastUsageIndex = p.LastUsageIndex
+	conv.Provider = p.Provider
+	conv.Model = p.Model
 	if len(p.Messages) == 0 && conv.LastUsageIndex == 0 {
 		conv.LastUsageIndex = -1
 	}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/s-ramirez/kroos-core/internal/channel"
+	"github.com/s-ramirez/kroos-core/internal/llm"
 	"github.com/s-ramirez/kroos-core/internal/plugin"
 	"github.com/s-ramirez/kroos-core/internal/schedule"
 	"github.com/s-ramirez/kroos-core/internal/tools"
@@ -767,5 +768,29 @@ func TestComposePluginPromptsWithoutSchedulerReturnsPluginOnly(t *testing.T) {
 	sections := runner.composePluginPrompts()
 	if len(sections) != 1 || sections[0] != "only" {
 		t.Fatalf("unexpected sections: %+v", sections)
+	}
+}
+
+func TestRunnerHandleTurnUsesConversationModelOverride(t *testing.T) {
+	def := &stubClient{}
+	override := &stubClient{responses: []*types.ChatResponse{{
+		Choices: []types.Choice{{Message: types.ResponseMessage{Role: "assistant", Content: strPtr("from override")}}},
+	}}}
+	var gotProv, gotModel string
+	runner := Runner{
+		Client:   def,
+		Registry: tools.NewRegistry(),
+		ClientFor: func(p, m string) (llm.ChatClient, error) {
+			gotProv, gotModel = p, m
+			return override, nil
+		},
+	}
+	conv := &channel.Conversation{Key: channel.Key{Channel: "cli", Thread: "default"}, Provider: "omlx", Model: "gemma"}
+	var replies []string
+	if err := runner.HandleTurn(context.Background(), conv, "hi", captureReply(&replies)); err != nil {
+		t.Fatal(err)
+	}
+	if def.calls != 0 || override.calls != 1 || gotProv != "omlx" || gotModel != "gemma" {
+		t.Fatalf("def=%d override=%d prov=%q model=%q", def.calls, override.calls, gotProv, gotModel)
 	}
 }

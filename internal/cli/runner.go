@@ -33,9 +33,12 @@ import (
 //   - DistillMemory: a silent single-turn run that asks the model to
 //     refresh MEMORY.md at session exit.
 type Runner struct {
-	Client   llm.ChatClient
-	Registry *tools.Registry
-	Skills   *skills.Registry
+	Client llm.ChatClient
+	// ClientFor, if set, builds the client for a conversation whose /model
+	// override is set (Conversation.Provider/Model).
+	ClientFor func(provider, model string) (llm.ChatClient, error)
+	Registry  *tools.Registry
+	Skills    *skills.Registry
 	// AfterTurnHooks run after each assistant text response. The first hook
 	// that returns a non-empty string wins: its message is appended as a user
 	// turn, the agent loop continues, and remaining hooks are skipped for
@@ -119,6 +122,13 @@ func (r *Runner) HandleTurn(ctx context.Context, conv *channel.Conversation, use
 	}
 
 	client := r.Client
+	if conv.Model != "" && r.ClientFor != nil {
+		c, err := r.ClientFor(conv.Provider, conv.Model)
+		if err != nil {
+			return fmt.Errorf("model override %s: %w", conv.Model, err)
+		}
+		client = c
+	}
 
 	// Per-conversation workspace: chdir for the duration of the turn.
 	// Safe because the dispatcher serializes turns.
