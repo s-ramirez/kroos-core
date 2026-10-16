@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -22,6 +23,7 @@ import (
 	telegramchannel "github.com/s-ramirez/kroos-core/internal/channel/telegram"
 	"github.com/s-ramirez/kroos-core/internal/cli"
 	"github.com/s-ramirez/kroos-core/internal/compaction"
+	"github.com/s-ramirez/kroos-core/internal/config"
 	heartbeatPkg "github.com/s-ramirez/kroos-core/internal/heartbeat"
 	"github.com/s-ramirez/kroos-core/internal/llm"
 	"github.com/s-ramirez/kroos-core/internal/memory"
@@ -43,9 +45,24 @@ func main() {
 		return
 	}
 
-	if err := loadDotenv(".env"); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: loading .env: %v\n", err)
+	if len(os.Args) > 1 && os.Args[1] == "config" {
+		loadEnvAndConfig()
+		if err := runConfig(os.Args[2:], os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "config: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
+
+	explicit, err := parseRunFlags(os.Args[1:])
+	if errors.Is(err, flag.ErrHelp) {
+		return
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(2)
+	}
+	loadEnvAndConfig()
 
 	baseURL := os.Getenv("KROOS_BASE_URL")
 	if baseURL == "" {
@@ -82,6 +99,16 @@ func main() {
 		apiKey = ""
 		if agentCfg.APIKeyEnv != "" {
 			apiKey = os.Getenv(agentCfg.APIKeyEnv)
+		}
+		// CLI flags beat the agent config file.
+		if explicit["base_url"] {
+			baseURL = os.Getenv("KROOS_BASE_URL")
+		}
+		if explicit["model"] {
+			model = os.Getenv("KROOS_MODEL")
+		}
+		if explicit["api_key"] {
+			apiKey = os.Getenv("KROOS_API_KEY")
 		}
 	}
 
@@ -696,6 +723,17 @@ func filterTools(in []tools.Tool, allowed map[string]struct{}) []tools.Tool {
 		}
 	}
 	return filtered
+}
+
+// loadEnvAndConfig fills unset env vars from .env, then project config, then
+// global config.
+func loadEnvAndConfig() {
+	if err := loadDotenv(".env"); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: loading .env: %v\n", err)
+	}
+	if err := config.Apply(config.ProjectPath(), config.GlobalPath()); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: loading config: %v\n", err)
+	}
 }
 
 func loadDotenv(path string) error {
