@@ -157,6 +157,8 @@ func (s *Scheduler) fire(job Job) bool {
 		Deliver:  job.Deliver,
 		Tools:    job.Tools,
 		Model:    job.Model,
+
+		ActiveHours: job.ActiveHours,
 	}
 	select {
 	case s.events <- ev:

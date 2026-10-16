@@ -132,3 +132,14 @@ func TestExecutorReplaysContext(t *testing.T) {
 		t.Fatalf("unexpected messages: %+v", got)
 	}
 }
+
+func TestIsNothingToReportAcceptsLegacyToken(t *testing.T) {
+	for _, s := range []string{"", "NOTHING_TO_REPORT", "heartbeat_ok.", " HEARTBEAT_OK\n"} {
+		if !IsNothingToReport(s) {
+			t.Errorf("%q should be nothing-to-report", s)
+		}
+	}
+	if IsNothingToReport("HEARTBEAT_OK but the flight is $300") {
+		t.Error("content with text should be reported")
+	}
+}

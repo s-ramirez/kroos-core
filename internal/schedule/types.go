@@ -69,6 +69,8 @@ type Job struct {
 	// its LLM model. Both ignored for reminders.
 	Tools []string `json:"tools,omitempty"`
 	Model string   `json:"model,omitempty"`
+	// ActiveHours, if set, drops fires outside the window.
+	ActiveHours *ActiveHours `json:"activeHours,omitempty"`
 
 	// Synthetic flags in-memory-only jobs (heartbeat). Never persisted.
 	Synthetic bool `json:"-"`
@@ -78,14 +80,23 @@ type Job struct {
 // converts it into a <scheduled_event> user message before re-entering
 // the agent loop.
 type Event struct {
-	JobID    string
-	Name     string
-	Text     string
-	WakeMode string
-	Mode     string
-	Deliver  Delivery
-	Tools    []string
-	Model    string
+	JobID       string
+	Name        string
+	Text        string
+	WakeMode    string
+	Mode        string
+	Deliver     Delivery
+	Tools       []string
+	Model       string
+	ActiveHours *ActiveHours
+}
+
+// ActiveHours is an "HH:MM" 24h window (Start inclusive, End exclusive;
+// wraps midnight when End < Start) in Timezone (IANA; empty = local).
+type ActiveHours struct {
+	Start    string `json:"start"`
+	End      string `json:"end"`
+	Timezone string `json:"timezone,omitempty"`
 }
 
 const (

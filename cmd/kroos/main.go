@@ -536,15 +536,8 @@ func main() {
 		MemoryStore:         memoryStore,
 		Scheduler:           scheduler,
 		Compaction:          compaction.DefaultSettings,
-		HeartbeatEnabled:    hbCfg.Interval > 0,
 		SkillReviewInterval: envInt("KROOS_SKILL_REVIEW_INTERVAL", 10),
 		Tasks:               taskExecutor,
-		ClientForModel: func(m string) llm.ChatClient {
-			return llm.NewClient(baseURL, m, &llm.Options{
-				Timeout: llmTimeout,
-				APIKey:  apiKey,
-			})
-		},
 	}
 
 	runnerRef = &runner
@@ -607,53 +600,8 @@ func main() {
 			Scheduler: scheduler,
 			Target:    channel.Key{Channel: clichannel.Name, Thread: clichannel.DefaultThread},
 		}
-		if hbCfg.Interval > 0 {
-			delivery := &sched.HeartbeatDelivery{
-				Target:      hbCfg.Target,
-				Model:       hbCfg.Model,
-				ActiveStart: hbCfg.ActiveStart,
-				ActiveEnd:   hbCfg.ActiveEnd,
-				Timezone:    hbCfg.Timezone,
-			}
-			// CLISend wraps the CLI channel for heartbeat replies routed to terminal.
-			delivery.CLISend = func(ctx context.Context, content string) error {
-				return cliCh.Send(ctx, channel.Outbound{
-					Channel: clichannel.Name,
-					Thread:  clichannel.DefaultThread,
-					Content: content,
-				})
-			}
-			// OutboundSend delivers to the configured messaging channel.
-			switch hbCfg.Target {
-			case "imessage":
-				if imsgChannel != nil && hbCfg.To != "" {
-					ch, to := imsgChannel, hbCfg.To
-					delivery.OutboundSend = func(ctx context.Context, content string) error {
-						return ch.Send(ctx, channel.Outbound{Channel: "imessage", Thread: to, Content: content})
-					}
-				} else {
-					fmt.Fprintf(os.Stderr, "warning: heartbeat target=imessage but iMessage not configured or KROOS_HEARTBEAT_TO not set\n")
-				}
-			case "discord":
-				if discordChannel != nil && hbCfg.To != "" {
-					ch, to := discordChannel, hbCfg.To
-					delivery.OutboundSend = func(ctx context.Context, content string) error {
-						return ch.Send(ctx, channel.Outbound{Channel: "discord", Thread: to, Content: content})
-					}
-				} else {
-					fmt.Fprintf(os.Stderr, "warning: heartbeat target=discord but Discord not configured or KROOS_HEARTBEAT_TO not set\n")
-				}
-			case "telegram":
-				if telegramChannel != nil && hbCfg.To != "" {
-					ch, to := telegramChannel, hbCfg.To
-					delivery.OutboundSend = func(ctx context.Context, content string) error {
-						return ch.Send(ctx, channel.Outbound{Channel: "telegram", Thread: to, Content: content})
-					}
-				} else {
-					fmt.Fprintf(os.Stderr, "warning: heartbeat target=telegram but Telegram not configured or KROOS_HEARTBEAT_TO not set\n")
-				}
-			}
-			schedCh.Heartbeat = delivery
+		if hbCfg.Interval > 0 && hbCfg.Target != clichannel.Name && hbCfg.Target != "none" && hbCfg.To == "" {
+			fmt.Fprintf(os.Stderr, "warning: heartbeat target=%s needs KROOS_HEARTBEAT_TO; replies will fail to deliver\n", hbCfg.Target)
 		}
 		schedCh.RunTask = func(ev schedule.Event) {
 			if _, ok := taskExecutor.Submit(tasks.FromEvent(ev)); !ok {

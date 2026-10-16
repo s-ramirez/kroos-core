@@ -324,9 +324,11 @@ func (e *Executor) logf(format string, args ...any) {
 	}
 }
 
-var nothingRE = regexp.MustCompile(`(?i)NOTHING_TO_REPORT`)
+// nothingRE also accepts the legacy heartbeat token.
+var nothingRE = regexp.MustCompile(`(?i)NOTHING_TO_REPORT|HEARTBEAT_OK`)
 
-// IsNothingToReport reports whether text is empty or only the token.
+// IsNothingToReport reports whether text is empty or only the token
+// (or the legacy HEARTBEAT_OK).
 func IsNothingToReport(text string) bool {
 	s := nothingRE.ReplaceAllString(strings.TrimSpace(text), "")
 	return strings.TrimFunc(s, func(r rune) bool {

@@ -109,38 +109,12 @@ func (d *Dispatcher) process(ctx context.Context, in Inbound) {
 
 	conv := d.Store.Get(Key{Channel: in.Channel, Thread: in.Thread})
 
-	// Propagate per-message model override; cleared after the turn.
-	conv.ModelOverride = in.ModelOverride
 	conv.Attachments = in.Attachments
-	defer func() {
-		conv.ModelOverride = ""
-		conv.Attachments = nil
-	}()
+	defer func() { conv.Attachments = nil }()
 
-	// Snapshot message count before the turn so InterceptReply can prune it.
-	preTurnLen := len(conv.Messages)
-
-	var reply ReplyFunc
-	if in.InterceptReply != nil {
-		intercept := in.InterceptReply
-		reply = func(text string) error {
-			prune, err := intercept(ctx, text)
-			if prune {
-				conv.Messages = conv.Messages[:preTurnLen]
-			}
-			return err
-		}
-	} else {
-		reply = d.replyFuncFor(ctx, in.Channel, in.Thread, in.MessageID)
-	}
-
+	reply := d.replyFuncFor(ctx, in.Channel, in.Thread, in.MessageID)
 	if err := d.Handler.HandleTurn(ctx, conv, content, reply); err != nil {
-		if in.InterceptReply != nil {
-			// Don't route handler errors through the intercept; log instead.
-			d.logf("heartbeat handler error: %v", err)
-		} else {
-			_ = reply(fmt.Sprintf("error: %v\n", err))
-		}
+		_ = reply(fmt.Sprintf("error: %v\n", err))
 	}
 
 	if err := d.Store.Save(Key{Channel: in.Channel, Thread: in.Thread}); err != nil {

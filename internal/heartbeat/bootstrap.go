@@ -23,8 +23,13 @@ type Config struct {
 	Timezone    string
 }
 
-// DefaultPrompt is the nudge sent every heartbeat tick.
-const DefaultPrompt = "Heartbeat tick: if there is nothing actionable, reply HEARTBEAT_OK."
+// DefaultPrompt is the task prompt run every heartbeat tick.
+const DefaultPrompt = "Heartbeat check-in. Review your memory, any HEARTBEAT.md checklist in the workspace, and anything pending or time-sensitive. " +
+	"If something needs the user's attention, write them a short message about it; otherwise reply NOTHING_TO_REPORT."
+
+// JobID is the fixed ID of the synthetic heartbeat job (its task history
+// and state dir key).
+const JobID = "heartbeat"
 
 // ConfigFromEnv reads KROOS_HEARTBEAT_* and returns a Config.
 // Returns (Config{}, nil) when the heartbeat is disabled (interval unset).
@@ -58,14 +63,21 @@ func ConfigFromEnv(getenv func(string) string) (Config, error) {
 	}, nil
 }
 
-// Register inserts the heartbeat job into the scheduler. It is a no-op
-// when cfg.Interval == 0. The scheduler must already be constructed.
+// Register inserts the heartbeat as a synthetic mode=task job: each tick
+// runs an isolated background agent whose reply is delivered to
+// cfg.Target (suppressed on NOTHING_TO_REPORT / HEARTBEAT_OK). It is a
+// no-op when cfg.Interval == 0.
 func Register(scheduler *schedule.Scheduler, cfg Config, warn io.Writer) {
 	if cfg.Interval == 0 || scheduler == nil {
 		return
 	}
 	now := time.Now()
+	var hours *schedule.ActiveHours
+	if cfg.ActiveStart != "" && cfg.ActiveEnd != "" {
+		hours = &schedule.ActiveHours{Start: cfg.ActiveStart, End: cfg.ActiveEnd, Timezone: cfg.Timezone}
+	}
 	scheduler.Inject(schedule.Job{
+		ID:      JobID,
 		Name:    "heartbeat",
 		Enabled: true,
 		Schedule: schedule.Schedule{
@@ -73,7 +85,11 @@ func Register(scheduler *schedule.Scheduler, cfg Config, warn io.Writer) {
 			Every:  schedule.Duration(cfg.Interval),
 			Anchor: &now,
 		},
-		Text: cfg.Prompt,
+		Text:        cfg.Prompt,
+		Mode:        schedule.ModeTask,
+		Deliver:     schedule.Delivery{Target: cfg.Target, To: cfg.To},
+		Model:       cfg.Model,
+		ActiveHours: hours,
 	})
 	if warn != nil {
 		fmt.Fprintf(warn, "heartbeat enabled (every %s, target=%s)\n", cfg.Interval, cfg.Target)

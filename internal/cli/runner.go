@@ -12,7 +12,6 @@ import (
 
 	"github.com/s-ramirez/kroos-core/internal/channel"
 	"github.com/s-ramirez/kroos-core/internal/compaction"
-	heartbeatPkg "github.com/s-ramirez/kroos-core/internal/heartbeat"
 	"github.com/s-ramirez/kroos-core/internal/llm"
 	"github.com/s-ramirez/kroos-core/internal/memory"
 	"github.com/s-ramirez/kroos-core/internal/plugin"
@@ -76,17 +75,6 @@ type Runner struct {
 	// when false) are referenced by local path only.
 	ImageInput bool
 
-	// HeartbeatEnabled, if true, injects HEARTBEAT_OK usage instructions
-	// into the system prompt so the model knows how to suppress no-op
-	// heartbeat turns.
-	HeartbeatEnabled bool
-
-	// ClientForModel, if non-nil, is called to obtain a ChatClient for a
-	// specific model name. Used when conv.ModelOverride is set (e.g. for
-	// heartbeat turns that should use a cheaper/faster model). Falls back
-	// to r.Client when nil or when the override is empty.
-	ClientForModel func(model string) llm.ChatClient
-
 	// activeMemoryStore is the per-turn memory store override. Set by
 	// HandleTurn to conv.MemoryStore (or r.MemoryStore) and cleared on
 	// return. Read via ActiveMemoryStore so tools can route to the
@@ -130,14 +118,7 @@ func (r *Runner) HandleTurn(ctx context.Context, conv *channel.Conversation, use
 		return fmt.Errorf("client is required")
 	}
 
-	// Use a model-specific client when the turn requests an override
-	// (e.g. a heartbeat configured with KROOS_HEARTBEAT_MODEL).
 	client := r.Client
-	if conv.ModelOverride != "" && r.ClientForModel != nil {
-		if override := r.ClientForModel(conv.ModelOverride); override != nil {
-			client = override
-		}
-	}
 
 	// Per-conversation workspace: chdir for the duration of the turn.
 	// Safe because the dispatcher serializes turns.
@@ -260,9 +241,6 @@ func (r *Runner) SystemPrompt() string { return r.buildSystemPrompt() }
 // <scheduled_tasks> block describing currently-enabled user jobs.
 func (r *Runner) composePluginPrompts() []string {
 	sections := append([]string(nil), r.PluginPrompts...)
-	if r.HeartbeatEnabled {
-		sections = append(sections, heartbeatPkg.SystemPromptInstruction)
-	}
 	if r.Scheduler == nil {
 		return sections
 	}

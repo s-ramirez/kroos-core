@@ -35,10 +35,6 @@ type Conversation struct {
 	Key      Key
 	Messages []types.Message
 
-	// ModelOverride, if non-empty, is set by the dispatcher from the
-	// inbound message and cleared after the turn.
-	ModelOverride string
-
 	// Attachments, if non-empty, are the current turn's inbound media.
 	// Set by the dispatcher from the inbound message and cleared after
 	// the turn.

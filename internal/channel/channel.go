@@ -45,18 +45,6 @@ type Inbound struct {
 	// Participants lists other handles reachable in this thread (e.g. members
 	// of an iMessage group chat). Empty for DMs / channels with no roster.
 	Participants []string
-
-	// InterceptReply, if non-nil, is called by the dispatcher instead of
-	// Channel.Send when the runner produces a reply for this message.
-	// Returning pruneLastTurn=true causes the dispatcher to truncate
-	// conv.Messages back to the length it had before HandleTurn was called,
-	// discarding the exchange from history (used for HEARTBEAT_OK turns).
-	InterceptReply func(ctx context.Context, content string) (pruneLastTurn bool, err error)
-
-	// ModelOverride, if non-empty, asks the turn handler to use a specific
-	// model for this turn instead of its default. The dispatcher copies this
-	// onto Conversation.ModelOverride before calling HandleTurn.
-	ModelOverride string
 }
 
 // Outbound is a message leaving the dispatcher, destined for the Send

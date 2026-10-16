@@ -87,8 +87,8 @@ func runInit(args []string) error {
 	}
 
 	fmt.Fprintln(out, "\n== Heartbeat ==")
-	fmt.Fprintln(out, "Periodic tick that wakes the agent on a fixed interval.")
-	fmt.Fprintln(out, "The agent can respond with HEARTBEAT_OK to suppress output and keep context clean.")
+	fmt.Fprintln(out, "Periodic background check-in run on a fixed interval.")
+	fmt.Fprintln(out, "Each tick runs isolated; the agent replies NOTHING_TO_REPORT to stay silent.")
 	if promptYesNo(reader, out, "Enable heartbeat?", false) {
 		ask("KROOS_HEARTBEAT_INTERVAL", "Interval (e.g. 10m, 1h)", "15m")
 		ask("KROOS_HEARTBEAT_MODEL", "Model override for heartbeat turns (blank = same as default)", "")
