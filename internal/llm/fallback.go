@@ -11,8 +11,21 @@ import (
 	"github.com/s-ramirez/kroos-core/internal/types"
 )
 
-// fallbackCooldown is how long a failed provider is skipped before retrying it.
-const fallbackCooldown = time.Minute
+// fallbackCooldown is how long a failed provider is skipped before retrying
+// it; requests the provider rejected outright (4xx other than 408/429, e.g.
+// an unsupported model) are config problems, so they're skipped longer.
+const (
+	fallbackCooldown         = time.Minute
+	fallbackRejectedCooldown = 10 * time.Minute
+)
+
+func cooldownFor(err error) time.Duration {
+	var ce *ClientError
+	if errors.As(err, &ce) && ce.Status >= 400 && ce.Status < 500 && ce.Status != 408 && ce.Status != 429 {
+		return fallbackRejectedCooldown
+	}
+	return fallbackCooldown
+}
 
 type fallbackTarget struct {
 	provider, model string
@@ -83,7 +96,7 @@ func (f *FallbackClient) Chat(ctx context.Context, messages []types.Message, too
 		if ctx.Err() != nil {
 			return nil, err
 		}
-		f.p.markDown(t.provider, fallbackCooldown)
+		f.p.markDown(t.provider, cooldownFor(err))
 		errs = append(errs, fmt.Sprintf("%s: %v", t.provider, err))
 		if len(order) == 1 {
 			return nil, err

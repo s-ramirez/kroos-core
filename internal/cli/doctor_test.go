@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,5 +95,32 @@ func TestDoctorPromptIncludesFailuresAndLog(t *testing.T) {
 		if !strings.Contains(spec.Prompt, want) {
 			t.Errorf("prompt missing %q", want)
 		}
+	}
+}
+
+func TestDoctorProgressAndStepLogging(t *testing.T) {
+	cfg, _ := doctorFixture(t)
+	cfg.Progress = &DoctorProgress{}
+	var logged []string
+	cfg.Logf = func(f string, a ...any) { logged = append(logged, fmt.Sprintf(f, a...)) }
+	BuildDoctor(nil, []tools.Tool{tools.NewBashTool()}, cfg)
+	if !strings.Contains(cfg.Progress.Status(), "0 steps") {
+		t.Fatalf("status: %q", cfg.Progress.Status())
+	}
+	g := newDoctorGuard(cfg)
+	g.progress, g.logf = cfg.Progress, cfg.Logf
+	raw, _ := json.Marshal(map[string]string{"action": "set", "key": "discord.token", "value": "SECRETVALUE"})
+	g.BeforeToolCall(tools.HookContext{}, "kroos_config", raw)
+	bashCall(g, "git push origin main", "")
+	st := cfg.Progress.Status()
+	if !strings.Contains(st, "2 steps") || !strings.Contains(st, "(blocked)") {
+		t.Fatalf("status: %q", st)
+	}
+	if strings.Contains(strings.Join(logged, "\n"), "SECRETVALUE") || len(logged) != 2 {
+		t.Fatalf("logged: %v", logged)
+	}
+	cfg.Progress.Done()
+	if cfg.Progress.Status() != "" {
+		t.Fatal("status after done")
 	}
 }

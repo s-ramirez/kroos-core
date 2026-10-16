@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/s-ramirez/kroos-core/internal/config"
 	"github.com/s-ramirez/kroos-core/internal/health"
@@ -61,5 +62,14 @@ func TestKroosHealthTool(t *testing.T) {
 	}
 	if res := runTool(t, NewKroosHealthTool(m, true), KroosHealthParams{Action: "restart_process"}); res.IsError || !m.TakeProcessRestart() {
 		t.Fatalf("service restart: %s", res.Output)
+	}
+}
+
+func TestBashDefaultTimeoutKillsHangingCommand(t *testing.T) {
+	tool := NewBashToolWithTimeout(200 * time.Millisecond)
+	start := time.Now()
+	res := runTool(t, tool, BashParams{Command: "sleep 30"})
+	if time.Since(start) > 5*time.Second {
+		t.Fatalf("not killed (took %s): %s", time.Since(start), res.Output)
 	}
 }

@@ -34,10 +34,7 @@ func loadAgentFile(path string) (*Definition, error) {
 
 	frontmatter, body := parseFrontmatter(string(data))
 
-	model := strings.TrimSpace(frontmatter["model"])
-	if model == "" {
-		return nil, fmt.Errorf("%s: model is required", path)
-	}
+	model := strings.TrimSpace(frontmatter["model"]) // "" = provider default
 
 	tools := parseList(frontmatter["tools"])
 	if len(tools) == 0 {

@@ -12,7 +12,10 @@ import (
 	"time"
 )
 
-type BashTool struct{}
+type BashTool struct {
+	// DefaultTimeout applies when the call sets no timeoutMs (0 = none).
+	DefaultTimeout time.Duration
+}
 
 var bashDefinition = ToolDefinition{
 	Name:        "bash",
@@ -53,6 +56,12 @@ func NewBashTool() *BashTool {
 	return &BashTool{}
 }
 
+// NewBashToolWithTimeout returns a bash tool whose commands are killed after
+// d unless the call asks for a different timeoutMs (for unattended agents).
+func NewBashToolWithTimeout(d time.Duration) *BashTool {
+	return &BashTool{DefaultTimeout: d}
+}
+
 func (t *BashTool) Definition() ToolDefinition {
 	return bashDefinition
 }
@@ -78,7 +87,11 @@ func (t *BashTool) Execute(ctx context.Context, raw json.RawMessage) (ToolResult
 		}
 	}
 
-	result, err := runShell(ctx, params.Command, cwd, time.Duration(params.TimeoutMS)*time.Millisecond)
+	timeout := time.Duration(params.TimeoutMS) * time.Millisecond
+	if timeout == 0 {
+		timeout = t.DefaultTimeout
+	}
+	result, err := runShell(ctx, params.Command, cwd, timeout)
 	if err != nil {
 		return errorResultf("failed to execute command: %v", err), nil
 	}

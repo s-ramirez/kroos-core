@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/s-ramirez/kroos-core/internal/health"
@@ -29,6 +30,64 @@ type DoctorConfig struct {
 	LogFile   string // process log to inspect ("" = none)
 	Monitor   *health.Monitor
 	Note      string // what the user asked, if anything
+	Progress  *DoctorProgress
+	Logf      func(format string, args ...any)
+}
+
+// DoctorProgress tracks the running investigation for /doctor status.
+type DoctorProgress struct {
+	mu      sync.Mutex
+	running bool
+	started time.Time
+	steps   int
+	last    string
+}
+
+func (p *DoctorProgress) start() {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	p.running, p.started, p.steps, p.last = true, time.Now(), 0, ""
+	p.mu.Unlock()
+}
+
+func (p *DoctorProgress) step(desc string) int {
+	if p == nil {
+		return 0
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.steps++
+	p.last = desc
+	return p.steps
+}
+
+// Done marks the investigation finished.
+func (p *DoctorProgress) Done() {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	p.running = false
+	p.mu.Unlock()
+}
+
+// Status describes the current run ("" when idle).
+func (p *DoctorProgress) Status() string {
+	if p == nil {
+		return ""
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.running {
+		return ""
+	}
+	s := fmt.Sprintf("running for %s, %d steps", time.Since(p.started).Round(time.Second), p.steps)
+	if p.last != "" {
+		s += ", latest: " + p.last
+	}
+	return s
 }
 
 // WorktreeRoot is where the doctor makes code changes (never the live checkout).
@@ -41,7 +100,7 @@ const DoctorPrompt = `Investigate why kroos is unhealthy and fix it if you safel
 
 Process:
 1. kroos_health action=status, then read the log excerpt below (and the log file if needed).
-2. Form a hypothesis and verify it: kroos_config action=list, test connectivity with bash (curl -sS -m 10, nc -z, dig), check versions and recent git history in the source checkout (read-only).
+2. Form a hypothesis and verify it (commands are killed after 2 minutes; never run anything that streams or waits forever, e.g. tail -f, log stream, curl without -m): kroos_config action=list, test connectivity with bash (curl -sS -m 10, nc -z, dig), check versions and recent git history in the source checkout (read-only).
 3. Fix within your scope:
    - Config: change non-secret settings with kroos_config, then kroos_health action=restart_process.
    - Transient/network: retry with kroos_health action=restart once the cause is gone.
@@ -67,7 +126,10 @@ Never include secret values.`
 // and repair tools behind a guard hook, and a prompt with current health.
 func BuildDoctor(client llm.ChatClient, pool []tools.Tool, cfg DoctorConfig) tasks.AgentSpec {
 	reg := tools.NewRegistry(pool...)
-	reg.AddHook(newDoctorGuard(cfg))
+	guard := newDoctorGuard(cfg)
+	guard.progress, guard.logf = cfg.Progress, cfg.Logf
+	reg.AddHook(guard)
+	cfg.Progress.start()
 	r := &Runner{
 		Client:    client,
 		Registry:  reg,
@@ -153,6 +215,8 @@ type doctorGuard struct {
 	source    string
 	worktrees string
 	creds     []string
+	progress  *DoctorProgress
+	logf      func(format string, args ...any)
 }
 
 func newDoctorGuard(cfg DoctorConfig) *doctorGuard {
@@ -171,7 +235,44 @@ var (
 	gitMutationRE = regexp.MustCompile(`\bgit\b[^;&|\n]*\b(commit|checkout|switch|reset|merge|rebase|clean|stash|pull|am|apply|cherry-pick|restore|rm|mv|add|tag)\b`)
 )
 
-func (g *doctorGuard) BeforeToolCall(_ tools.HookContext, name string, params json.RawMessage) string {
+func (g *doctorGuard) BeforeToolCall(hctx tools.HookContext, name string, params json.RawMessage) string {
+	reason := g.check(name, params)
+	desc := describeStep(name, params)
+	if reason != "" {
+		desc += " (blocked)"
+	}
+	n := g.progress.step(desc)
+	if g.logf != nil {
+		g.logf("[doctor] step %d: %s", n, desc)
+	}
+	return reason
+}
+
+// describeStep is a one-line, secret-free summary of a tool call.
+func describeStep(name string, params json.RawMessage) string {
+	var p map[string]any
+	_ = json.Unmarshal(params, &p)
+	detail := ""
+	for _, k := range []string{"command", "action", "path", "url", "query"} {
+		if v, ok := p[k].(string); ok && v != "" {
+			detail = v
+			break
+		}
+	}
+	if c, ok := p["component"].(string); ok && c != "" {
+		detail += " " + c
+	}
+	if k, ok := p["key"].(string); ok && k != "" {
+		detail += " " + k // never the value
+	}
+	detail = strings.Join(strings.Fields(detail), " ")
+	if len(detail) > 120 {
+		detail = detail[:117] + "..."
+	}
+	return strings.TrimSpace(name + " " + detail)
+}
+
+func (g *doctorGuard) check(name string, params json.RawMessage) string {
 	switch name {
 	case "bash":
 		var p tools.BashParams

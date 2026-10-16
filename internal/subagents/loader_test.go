@@ -48,7 +48,8 @@ You are Scout.
 	}
 }
 
-func TestLoadDefinitionsRejectsMissingModel(t *testing.T) {
+// A missing model means "use the provider's default model".
+func TestLoadDefinitionsAllowsMissingModel(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "scout.md"), []byte(`---
 name: scout
@@ -64,10 +65,7 @@ You are Scout.
 	if err != nil {
 		t.Fatalf("LoadDefinitions returned error: %v", err)
 	}
-	if len(defs) != 0 {
-		t.Fatalf("expected no definitions, got %#v", defs)
-	}
-	if len(diags) == 0 {
-		t.Fatalf("expected diagnostics for invalid frontmatter")
+	if len(diags) != 0 || len(defs) != 1 || defs[0].Model != "" {
+		t.Fatalf("defs=%#v diags=%v", defs, diags)
 	}
 }

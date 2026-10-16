@@ -27,7 +27,7 @@ var Keys = []Key{
 	{"model", "KROOS_MODEL", "", "Model for the selected provider (default: <provider>.model)", false},
 	{"provider", "KROOS_PROVIDER", "chatgpt", "LLM provider: chatgpt | omlx", false},
 	{"fallback", "KROOS_FALLBACK", "true", "Fall back to the other provider when one fails", false},
-	{"chatgpt.model", "KROOS_CHATGPT_MODEL", "gpt-5.4", "Default ChatGPT model", false},
+	{"chatgpt.model", "KROOS_CHATGPT_MODEL", "", "Default ChatGPT model (empty = first in your account's catalog)", false},
 	{"omlx.model", "KROOS_OMLX_MODEL", "", "Default oMLX model (empty = first served)", false},
 	{"omlx.url", "KROOS_OMLX_URL", "", "oMLX server URL (e.g. http://host:8000)", false},
 	{"omlx.api_key", "KROOS_OMLX_API_KEY", "", "oMLX API key", true},

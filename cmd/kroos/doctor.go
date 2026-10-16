@@ -59,10 +59,16 @@ func incidentNotifier(channels func() *channel.Registry, monitor *health.Monitor
 
 // doctorCommand is the /doctor slash command: starts an investigation that
 // reports back to the conversation it was asked from.
-func doctorCommand(exec *tasks.Executor, monitor *health.Monitor) channel.SlashCommand {
+func doctorCommand(exec *tasks.Executor, monitor *health.Monitor, progress *cli.DoctorProgress) channel.SlashCommand {
 	return func(_ context.Context, conv *channel.Conversation, args string) string {
 		if exec == nil {
 			return "doctor unavailable: background tasks are disabled\n"
+		}
+		if args == "status" {
+			if st := progress.Status(); st != "" {
+				return "🩺 Doctor " + st + "\n"
+			}
+			return "🩺 The doctor is idle. Reply /doctor to start an investigation.\n"
 		}
 		target, to := conv.Key.Channel, conv.Key.Thread
 		if target == sched.Name {
@@ -77,7 +83,7 @@ func doctorCommand(exec *tasks.Executor, monitor *health.Monitor) channel.SlashC
 			Timeout: cli.DoctorTimeout,
 		})
 		if !ok {
-			return "🩺 The doctor is already investigating; the report will arrive here.\n"
+			return "🩺 The doctor is already investigating (" + progress.Status() + "); the report will arrive where it was requested.\n"
 		}
 		what := "kroos"
 		if failing := monitor.Failing(); len(failing) > 0 {
@@ -87,17 +93,18 @@ func doctorCommand(exec *tasks.Executor, monitor *health.Monitor) channel.SlashC
 			}
 			what = strings.Join(names, ", ")
 		}
-		return fmt.Sprintf("🩺 Investigating %s. I'll report back here when done.\n", what)
+		return fmt.Sprintf("🩺 Investigating %s. I'll report back here when done (at most %s). /doctor status shows progress.\n", what, cli.DoctorTimeout)
 	}
 }
 
 // doctorAfterRun reports a failed doctor run and performs a requested
 // process restart (launchd's KeepAlive brings kroos back up).
-func doctorAfterRun(monitor *health.Monitor, deliver tasks.Deliverer, service bool, logf func(string, ...any)) func(tasks.Task, tasks.Run) {
+func doctorAfterRun(monitor *health.Monitor, progress *cli.DoctorProgress, deliver tasks.Deliverer, service bool, logf func(string, ...any)) func(tasks.Task, tasks.Run) {
 	return func(t tasks.Task, r tasks.Run) {
 		if t.Agent != cli.DoctorAgent {
 			return
 		}
+		progress.Done()
 		if r.Status == "error" && deliver != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			_ = deliver(ctx, t.Deliver, "🩺 The doctor run failed: "+r.Error)

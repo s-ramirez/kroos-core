@@ -2,7 +2,6 @@
 name: gpt
 description: Delegate to ChatGPT for tasks needing strong general reasoning.
 when_to_use: Use when the parent agent needs a second opinion from a hosted frontier model, or when local models are struggling with reasoning-heavy tasks.
-model: gpt-5.4
 provider: chatgpt
 context_size: 400000
 tools: [read, grep, ls, find]

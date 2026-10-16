@@ -55,7 +55,7 @@ go run ./cmd/kroos
 
 ```
 == Setup ==
-  1. Providers          default chatgpt · chatgpt: logged in · gpt-5.4 · omlx: http://host:8000 · auto model
+  1. Providers          default chatgpt · chatgpt: logged in · gpt-5.5 · omlx: http://host:8000 · auto model
   2. Channels           discord: enabled · telegram: not configured · imessage: disabled
   3. Heartbeat          every 30m → discord
   4. Extras             web UI :8420
@@ -104,7 +104,7 @@ model name to the wrong one:
 
 | Key             | Default        | Meaning                                       |
 |-----------------|----------------|-----------------------------------------------|
-| `chatgpt.model` | `gpt-5.4`      | ChatGPT default                               |
+| `chatgpt.model` | first listed   | ChatGPT default (your account's catalog)      |
 | `omlx.model`    | first served   | oMLX default (empty = first model listed)     |
 | `model`         | unset          | Override for the selected provider            |
 
@@ -170,7 +170,7 @@ Core settings:
 |------------------------|-----------------------------|------------------------------|
 | `provider`             | `KROOS_PROVIDER`            | `chatgpt`                    |
 | `model`                | `KROOS_MODEL`               | provider default             |
-| `chatgpt.model`        | `KROOS_CHATGPT_MODEL`       | `gpt-5.4`                    |
+| `chatgpt.model`        | `KROOS_CHATGPT_MODEL`       | first listed                 |
 | `omlx.model`           | `KROOS_OMLX_MODEL`          | first served                 |
 | `omlx.url`             | `KROOS_OMLX_URL`            | unset                        |
 | `omlx.api_key`         | `KROOS_OMLX_API_KEY`        | unset                        |
@@ -205,7 +205,6 @@ frontmatter. Its body becomes a `# Personality` section of the system prompt.
 
 ```yaml
 ---
-model: gpt-5.4
 provider: chatgpt
 tools: [read, write, edit, bash, grep, ls, find]
 plugins: [webui]

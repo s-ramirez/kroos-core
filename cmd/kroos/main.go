@@ -504,7 +504,9 @@ func main() {
 			taskToolPool = append(taskToolPool, t)
 		}
 	}
-	doctorTools := append(filterTools(builtinTools, nameSet([]string{"read", "write", "edit", "bash", "grep", "ls", "find", "web_fetch", "web_search"})),
+	doctorProgress := &cli.DoctorProgress{}
+	doctorTools := append(filterTools(builtinTools, nameSet([]string{"read", "write", "edit", "grep", "ls", "find", "web_fetch", "web_search"})),
+		tools.NewBashToolWithTimeout(2*time.Minute),
 		tools.NewKroosConfigTool(config.GlobalPath()),
 		tools.NewKroosHealthTool(monitor, service),
 	)
@@ -519,7 +521,8 @@ func main() {
 		case cli.DoctorAgent:
 			return cli.BuildDoctor(client, doctorTools, cli.DoctorConfig{
 				Home: kroosHome, SourceDir: sourceDir(), LogFile: os.Getenv("KROOS_LOG_FILE"),
-				Monitor: monitor, Note: t.Prompt,
+				Monitor: monitor, Note: t.Prompt, Progress: doctorProgress,
+				Logf: func(f string, a ...any) { fmt.Fprintf(os.Stderr, f+"\n", a...) },
 			}), nil
 		case cli.CuratorAgent:
 			return cli.BuildCurator(client, skillTools, curatorCfg)
@@ -619,7 +622,7 @@ func main() {
 	monitor.OnIncident = incidentNotifier(func() *channel.Registry { return channelsRef }, monitor, func(f string, a ...any) {
 		fmt.Fprintf(os.Stderr, "[health] "+f+"\n", a...)
 	})
-	taskExecutor.AfterRun = doctorAfterRun(monitor, taskExecutor.Deliver, service, func(f string, a ...any) {
+	taskExecutor.AfterRun = doctorAfterRun(monitor, doctorProgress, taskExecutor.Deliver, service, func(f string, a ...any) {
 		fmt.Fprintf(os.Stderr, "[health] "+f+"\n", a...)
 	})
 	cliCh := clichannel.NewStdio(os.Stdin, os.Stdout)
@@ -673,7 +676,7 @@ func main() {
 		Commands: &channel.CommandExpander{Skills: skillsRegistry, Usage: skillUsage},
 		SlashCommands: map[string]channel.SlashCommand{
 			"model":  sessionModelCommand(providers, modelChoice{provider, displayModel(providers, model)}),
-			"doctor": doctorCommand(taskExecutor, monitor),
+			"doctor": doctorCommand(taskExecutor, monitor, doctorProgress),
 		},
 		Health:      monitor,
 		Handler:     &channel.Router{Default: &runner, Routes: routes},

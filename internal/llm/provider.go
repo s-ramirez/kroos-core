@@ -30,7 +30,7 @@ type Providers struct {
 
 	mu          sync.Mutex
 	auth        *ChatGPTAuth
-	omlxDefault string
+	autoModels  map[string]string // provider -> first catalog model, when none configured
 	downUntil   map[string]time.Time // provider cooldowns after failures, shared by all clients
 }
 
@@ -111,8 +111,9 @@ func (p *Providers) newCtx(ctx context.Context, provider, model string, timeout 
 	return nil, unknownProvider(provider)
 }
 
-// ModelFor returns model, or provider's default when empty. oMLX with no
-// configured default uses the first model the server lists.
+// ModelFor returns model, or provider's default when empty. With no
+// configured default it uses the first model the provider lists (ChatGPT's
+// catalog depends on the account's plan, so nothing is hard-coded).
 func (p *Providers) ModelFor(ctx context.Context, provider, model string) (string, error) {
 	if model != "" {
 		return model, nil
@@ -120,24 +121,24 @@ func (p *Providers) ModelFor(ctx context.Context, provider, model string) (strin
 	if m := p.Models[provider]; m != "" {
 		return m, nil
 	}
-	if provider != ProviderOMLX {
-		return "", fmt.Errorf("%s: no model configured (set %s.model)", provider, provider)
-	}
 	p.mu.Lock()
-	cached := p.omlxDefault
+	cached := p.autoModels[provider]
 	p.mu.Unlock()
 	if cached != "" {
 		return cached, nil
 	}
-	models, err := p.ListModels(ctx, ProviderOMLX)
+	models, err := p.ListModels(ctx, provider)
 	if err != nil {
 		return "", err
 	}
 	if len(models) == 0 {
-		return "", errors.New("omlx: server lists no models (set omlx.model)")
+		return "", fmt.Errorf("%s: no models available (set %s.model)", provider, provider)
 	}
 	p.mu.Lock()
-	p.omlxDefault = models[0]
+	if p.autoModels == nil {
+		p.autoModels = map[string]string{}
+	}
+	p.autoModels[provider] = models[0]
 	p.mu.Unlock()
 	return models[0], nil
 }

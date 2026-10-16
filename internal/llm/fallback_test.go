@@ -108,3 +108,18 @@ func TestFirstReady(t *testing.T) {
 		t.Fatalf("got %s", got)
 	}
 }
+
+func TestCooldownForRejectedRequests(t *testing.T) {
+	cases := map[error]time.Duration{
+		&ClientError{Status: 400, Body: "model not supported"}: fallbackRejectedCooldown,
+		&ClientError{Status: 404}:                              fallbackRejectedCooldown,
+		&ClientError{Status: 429}:                              fallbackCooldown,
+		&ClientError{Status: 502}:                              fallbackCooldown,
+		fmt.Errorf("dial tcp: timeout"):                        fallbackCooldown,
+	}
+	for err, want := range cases {
+		if got := cooldownFor(err); got != want {
+			t.Errorf("%v: got %s want %s", err, got, want)
+		}
+	}
+}

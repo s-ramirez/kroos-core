@@ -86,7 +86,7 @@ func TestDoctorCommandRunsAndReportsToConversation(t *testing.T) {
 			return nil
 		})
 	m := health.NewMonitor("")
-	cmd := doctorCommand(exec, m)
+	cmd := doctorCommand(exec, m, nil)
 	conv := &channel.Conversation{Key: channel.Key{Channel: "telegram", Thread: "42"}}
 
 	if out := cmd(context.Background(), conv, "discord is down"); !strings.Contains(out, "Investigating") {

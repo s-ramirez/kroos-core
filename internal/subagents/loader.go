@@ -91,10 +91,7 @@ func loadDefinitionFile(path string) (*Definition, []string, error) {
 		whenToUse = strings.TrimSpace(frontmatter["when-to-use"])
 	}
 
-	model := strings.TrimSpace(frontmatter["model"])
-	if model == "" {
-		diagnostics = append(diagnostics, fmt.Sprintf("%s: model is required", path))
-	}
+	model := strings.TrimSpace(frontmatter["model"]) // "" = provider default
 
 	provider := strings.TrimSpace(frontmatter["provider"])
 
