@@ -33,6 +33,7 @@ var Keys = []Key{
 	{"omlx.api_key", "KROOS_OMLX_API_KEY", "", "oMLX API key", true},
 	{"llm.timeout", "KROOS_LLM_TIMEOUT", "5m", "LLM request timeout", false},
 	{"llm.subagent_timeout", "KROOS_SUBAGENT_LLM_TIMEOUT", "", "Subagent LLM timeout (default: llm.timeout)", false},
+	{"deploy_notify", "KROOS_DEPLOY_NOTIFY", "auto", "Announce new versions: auto (first channel with a home) | discord | telegram | imessage | none", false},
 	{"tool_progress", "KROOS_TOOL_PROGRESS", "true", "Live-edited tool-call message per turn on channels that support edits (Discord)", false},
 	{"log_dir", "KROOS_LOG_DIR", "", "Directory for LLM request/response logs", false},
 	{"webui.port", "KROOS_WEBUI_PORT", "", "Enable web UI plugin on this port", false},

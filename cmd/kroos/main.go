@@ -687,6 +687,10 @@ func main() {
 		},
 	}
 
+	announceDeploy(runCtx, envOr("KROOS_DEPLOY_NOTIFY", "auto"),
+		checkDeploy(filepath.Join(kroosHome, "state", "version"), sourceDir(), buildRevision()),
+		homeNotifier(func() *channel.Registry { return channelsRef }, monitor),
+		func(f string, a ...any) { fmt.Fprintf(os.Stderr, "[deploy] "+f+"\n", a...) })
 	runErr := dispatcher.Run(runCtx)
 	if userActivity {
 		if err := runner.DistillMemory(context.Background()); err != nil {

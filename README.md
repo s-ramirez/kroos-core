@@ -270,6 +270,11 @@ bin/kroos init                           # wizard: ChatGPT login, oMLX, channels
 launchctl kickstart -k gui/$(id -u)/com.kroos.agent
 ```
 
+**Deploy notifications:** after each new version starts, kroos messages you
+(`🚀 kroos updated to e69c347:` plus the new commits) in the first channel that
+has a home channel set (`discord.home_channel`, …). Change this with
+`kroos config set deploy_notify discord|telegram|imessage|none`.
+
 Run `kroos login` on each machine: ChatGPT rotates refresh tokens, so machines
 sharing one token log each other out. Use the same `KROOS_HOME` for these
 `bin/kroos` commands as you gave `install.sh`.

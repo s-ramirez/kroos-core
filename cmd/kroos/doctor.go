@@ -23,35 +23,16 @@ var notifyOrder = []string{"discord", "telegram", "imessage"}
 // incidentNotifier posts an incident to the first healthy channel with a
 // home thread, falling back to the CLI (stdout/log).
 func incidentNotifier(channels func() *channel.Registry, monitor *health.Monitor, logf func(string, ...any)) func(health.Incident) {
+	notify := homeNotifier(channels, monitor)
 	return func(inc health.Incident) {
 		text := fmt.Sprintf("⚠️ kroos: %s is failing (%d attempts): %s\nReply /doctor to let me investigate and fix it.",
 			inc.Component, inc.Count, inc.Error)
 		logf("incident: %s: %s", inc.Component, inc.Error)
-		reg := channels()
-		if reg == nil {
-			return
-		}
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
-			for _, name := range notifyOrder {
-				if monitor.IsOpen("channel:" + name) {
-					continue
-				}
-				ch, ok := reg.Lookup(name)
-				if !ok {
-					continue
-				}
-				h, ok := ch.(channel.Homer)
-				if !ok || h.Home() == "" {
-					continue
-				}
-				if err := ch.Send(ctx, channel.Outbound{Channel: name, Thread: h.Home(), Content: text}); err == nil {
-					return
-				}
-			}
-			if ch, ok := reg.Lookup(clichannel.Name); ok {
-				_ = ch.Send(ctx, channel.Outbound{Channel: clichannel.Name, Thread: clichannel.DefaultThread, Content: text + "\n"})
+			if err := notify(ctx, "auto", text); err != nil {
+				logf("incident alert not sent: %v", err)
 			}
 		}()
 	}
