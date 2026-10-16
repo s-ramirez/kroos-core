@@ -16,6 +16,8 @@ Run the CLI: `go run ./cmd/kroos` (defaults to the OpenAI API).
 
 Bootstrap a project workspace: `go run ./cmd/kroos init` scaffolds `.kroos/` with default `AGENTS.md`, `IDENTITY.md`, `USER.md`, and memory/skills directories from the embedded templates under `cmd/kroos/templates/`.
 
+**Config CLI** (`internal/config/`, `cmd/kroos/config.go`): every setting below has a dotted key (`kroos config keys`). Set via `kroos config set <key> <val> [--project]` (writes `~/.kroos/config.json` or `.kroos/config.json`), or per-run flags (`kroos --model x --heartbeat.interval 15m`, `--set key=val`). Precedence: flag > env > `.env` > project config > global config (> agent config for model/base_url/api_key, except flags). Config values are exported as the env vars below; new settings must be added to `config.Keys`.
+
 Environment variables: `KROOS_BASE_URL` (API endpoint, default `https://api.openai.com`), `KROOS_MODEL` (model name, default `"gpt-5.4"`), `KROOS_LLM_TIMEOUT` (default `5m`), `KROOS_SUBAGENT_LLM_TIMEOUT` (default: same as `KROOS_LLM_TIMEOUT`), `KROOS_ATTACHMENT_DIR` (where channels save inbound media; default `$TMPDIR/kroos-attachments`, one subdir per channel), `KROOS_IMAGE_INPUT` (default `true`; inline image attachments as vision input — set `false` for non-vision models).
 
 Heartbeat environment variables (all optional; heartbeat is disabled unless `KROOS_HEARTBEAT_INTERVAL` is set):
