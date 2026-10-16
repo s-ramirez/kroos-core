@@ -56,6 +56,15 @@ type Config struct {
 	// bot. Populated from profiles with senders: any.
 	OpenChats []string
 
+	// AllowAll lets any user address the bot, private chats included.
+	// Mention/tag gating in groups still applies.
+	AllowAll bool
+
+	// HomeChannel is the default chat ID for deliveries that name no
+	// recipient (e.g. heartbeat); HomeThreadID optionally picks a forum topic.
+	HomeChannel  string
+	HomeThreadID string
+
 	// APIBase overrides DefaultAPIBase (tests).
 	APIBase string
 
@@ -63,23 +72,23 @@ type Config struct {
 	PollTimeout time.Duration
 }
 
-// ConfigFromEnv reads KROOS_TELEGRAM_* environment variables. Returns
+// ConfigFromEnv reads TELEGRAM_* environment variables. Returns
 // (nil, "", nil) when no token is set, and a non-empty reason when
-// explicitly disabled via KROOS_TELEGRAM_ENABLED=false.
+// explicitly disabled via TELEGRAM_ENABLED=false.
 func ConfigFromEnv(getenv func(string) string, parseBool func(name string, def bool) bool) (*Config, string, error) {
-	if !parseBool("KROOS_TELEGRAM_ENABLED", true) {
-		return nil, "KROOS_TELEGRAM_ENABLED=false", nil
+	if !parseBool("TELEGRAM_ENABLED", true) {
+		return nil, "TELEGRAM_ENABLED=false", nil
 	}
-	token := strings.TrimSpace(getenv("KROOS_TELEGRAM_TOKEN"))
+	token := strings.TrimSpace(getenv("TELEGRAM_BOT_TOKEN"))
 	if token == "" {
 		return nil, "", nil
 	}
 	var owners []string
-	if raw := getenv("KROOS_TELEGRAM_OWNER_IDS"); raw != "" {
+	if raw := getenv("TELEGRAM_ALLOWED_USERS"); raw != "" {
 		for _, id := range strings.Split(raw, ",") {
 			if id = strings.TrimSpace(id); id != "" {
 				if _, err := strconv.ParseInt(id, 10, 64); err != nil {
-					return nil, "", fmt.Errorf("invalid KROOS_TELEGRAM_OWNER_IDS entry %q (want numeric user ID)", id)
+					return nil, "", fmt.Errorf("invalid TELEGRAM_ALLOWED_USERS entry %q (want numeric user ID)", id)
 				}
 				owners = append(owners, id)
 			}
@@ -88,7 +97,10 @@ func ConfigFromEnv(getenv func(string) string, parseBool func(name string, def b
 	return &Config{
 		Token:    token,
 		OwnerIDs: owners,
-		GroupTag: getenv("KROOS_TELEGRAM_GROUP_TAG"),
+		GroupTag:     getenv("TELEGRAM_GROUP_TAG"),
+		AllowAll:     parseBool("TELEGRAM_ALLOW_ALL_USERS", false),
+		HomeChannel:  strings.TrimSpace(getenv("TELEGRAM_HOME_CHANNEL")),
+		HomeThreadID: strings.TrimSpace(getenv("TELEGRAM_HOME_CHANNEL_THREAD_ID")),
 	}, "", nil
 }
 
@@ -115,6 +127,22 @@ func New(cfg Config) *Channel {
 }
 
 func (c *Channel) Name() string { return channelName }
+
+// Home returns the default delivery thread: "chatID" or "chatID:topicID".
+// Topic 1 is a forum's General topic, which the Bot API addresses by
+// omitting message_thread_id.
+func (c *Channel) Home() string {
+	if c.cfg.HomeChannel == "" || c.cfg.HomeThreadID == "" || c.cfg.HomeThreadID == "1" {
+		return c.cfg.HomeChannel
+	}
+	return c.cfg.HomeChannel + ":" + c.cfg.HomeThreadID
+}
+
+// splitThread splits "chatID:topicID" into its parts.
+func splitThread(thread string) (chatID, topicID string) {
+	chatID, topicID, _ = strings.Cut(thread, ":")
+	return chatID, topicID
+}
 
 // Listen resolves the bot identity, then long-polls getUpdates and
 // forwards qualifying messages onto out until ctx is cancelled.
@@ -211,7 +239,7 @@ func (c *Channel) accept(m *message) (string, string) {
 	isPrivate := m.Chat.Type == "private"
 	owner := c.isOwner(m.From.ID)
 	open := !isPrivate && c.isOpen(m.Chat.ID)
-	if !owner && !open {
+	if !owner && !open && !c.cfg.AllowAll {
 		return "", "non-owner"
 	}
 	if isPrivate {
@@ -285,9 +313,14 @@ func SendMessage(ctx context.Context, client *http.Client, apiBase, token, chatI
 	return sendText(ctx, client, apiBase, token, chatID, text, "")
 }
 
-func sendText(ctx context.Context, client *http.Client, apiBase, token, chatID, text, replyTo string) error {
+// sendText posts text to thread ("chatID" or "chatID:topicID").
+func sendText(ctx context.Context, client *http.Client, apiBase, token, thread, text, replyTo string) error {
+	chatID, topicID := splitThread(thread)
 	for _, chunk := range chunkMessage(text, maxMessageLen) {
 		params := map[string]any{"chat_id": chatID, "text": chunk}
+		if id, err := strconv.ParseInt(topicID, 10, 64); err == nil {
+			params["message_thread_id"] = id
+		}
 		if id, err := strconv.ParseInt(replyTo, 10, 64); err == nil {
 			params["reply_parameters"] = map[string]any{"message_id": id, "allow_sending_without_reply": true}
 			replyTo = ""
@@ -306,7 +339,8 @@ var photoTypes = map[string]bool{"image/jpeg": true, "image/png": true, "image/w
 const maxPhotoBytes = 10 << 20
 
 // sendFile uploads a local file as a photo (when possible) or document.
-func (c *Channel) sendFile(ctx context.Context, chatID string, att channel.Attachment) error {
+func (c *Channel) sendFile(ctx context.Context, thread string, att channel.Attachment) error {
+	chatID, topicID := splitThread(thread)
 	method, field := "sendDocument", "document"
 	if info, err := os.Stat(att.Path); err == nil && photoTypes[att.MimeType] && info.Size() <= maxPhotoBytes {
 		method, field = "sendPhoto", "photo"
@@ -327,6 +361,11 @@ func (c *Channel) sendFile(ctx context.Context, chatID string, att channel.Attac
 		err := func() error {
 			if err := mw.WriteField("chat_id", chatID); err != nil {
 				return err
+			}
+			if topicID != "" {
+				if err := mw.WriteField("message_thread_id", topicID); err != nil {
+					return err
+				}
 			}
 			h := textproto.MIMEHeader{}
 			h.Set("Content-Disposition", fmt.Sprintf(`form-data; name=%q; filename=%q`, field, name))

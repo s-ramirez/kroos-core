@@ -12,14 +12,14 @@ func TestApplyPrecedence(t *testing.T) {
 	if err := Save(proj, map[string]string{"model": "proj"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := Save(glob, map[string]string{"model": "glob", "heartbeat.interval": "15m", "KROOS_DISCORD_GUILD_TAG": "@k"}); err != nil {
+	if err := Save(glob, map[string]string{"model": "glob", "heartbeat.interval": "15m", "DISCORD_GUILD_TAG": "@k"}); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("KROOS_MODEL", "")
 	os.Unsetenv("KROOS_MODEL")
 	t.Setenv("KROOS_HEARTBEAT_INTERVAL", "1m")
-	t.Setenv("KROOS_DISCORD_GUILD_TAG", "")
-	os.Unsetenv("KROOS_DISCORD_GUILD_TAG")
+	t.Setenv("DISCORD_GUILD_TAG", "")
+	os.Unsetenv("DISCORD_GUILD_TAG")
 
 	if err := Apply(proj, glob); err != nil {
 		t.Fatal(err)
@@ -30,7 +30,7 @@ func TestApplyPrecedence(t *testing.T) {
 	if got := os.Getenv("KROOS_HEARTBEAT_INTERVAL"); got != "1m" {
 		t.Errorf("env should win, got %q", got)
 	}
-	if got := os.Getenv("KROOS_DISCORD_GUILD_TAG"); got != "@k" {
+	if got := os.Getenv("DISCORD_GUILD_TAG"); got != "@k" {
 		t.Errorf("env-name key = %q", got)
 	}
 }

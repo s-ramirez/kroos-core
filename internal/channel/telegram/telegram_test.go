@@ -182,19 +182,48 @@ func TestSendSurfacesAPIError(t *testing.T) {
 }
 
 func TestConfigFromEnv(t *testing.T) {
-	env := map[string]string{"KROOS_TELEGRAM_TOKEN": "t", "KROOS_TELEGRAM_OWNER_IDS": "1, 2"}
+	env := map[string]string{"TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_ALLOWED_USERS": "1, 2"}
 	getenv := func(k string) string { return env[k] }
 	parseBool := func(string, bool) bool { return true }
 	cfg, _, err := ConfigFromEnv(getenv, parseBool)
 	if err != nil || cfg == nil || len(cfg.OwnerIDs) != 2 {
 		t.Fatalf("cfg=%+v err=%v", cfg, err)
 	}
-	env["KROOS_TELEGRAM_OWNER_IDS"] = "@alice"
+	env["TELEGRAM_ALLOWED_USERS"] = "@alice"
 	if _, _, err := ConfigFromEnv(getenv, parseBool); err == nil {
 		t.Fatal("want error for non-numeric owner ID")
 	}
-	delete(env, "KROOS_TELEGRAM_TOKEN")
+	delete(env, "TELEGRAM_BOT_TOKEN")
 	if cfg, _, _ := ConfigFromEnv(getenv, parseBool); cfg != nil {
 		t.Fatal("want nil config without token")
+	}
+}
+
+func TestAllowAllAcceptsStrangers(t *testing.T) {
+	c := newTestChannel(Config{OwnerIDs: []string{"1"}, AllowAll: true})
+	if text, reason := c.accept(tmsg(2, 2, "private", "hi")); reason != "" || text != "hi" {
+		t.Errorf("private: %q %q", text, reason)
+	}
+	if _, reason := c.accept(tmsg(2, -5, "group", "hi")); reason == "" {
+		t.Error("group without mention should still drop")
+	}
+}
+
+func TestHomeTopic(t *testing.T) {
+	api := &fakeAPI{}
+	srv := httptest.NewServer(api.handler(t))
+	defer srv.Close()
+	c := New(Config{Token: "TOKEN", APIBase: srv.URL, HomeChannel: "-100", HomeThreadID: "7"})
+	if c.Home() != "-100:7" {
+		t.Fatalf("Home = %q", c.Home())
+	}
+	if err := c.Send(context.Background(), channel.Outbound{Thread: c.Home(), Content: "hi"}); err != nil {
+		t.Fatal(err)
+	}
+	if p := api.sent[0]; p["chat_id"] != "-100" || p["message_thread_id"] != float64(7) {
+		t.Errorf("sent %v", p)
+	}
+	if New(Config{HomeChannel: "-100", HomeThreadID: "1"}).Home() != "-100" {
+		t.Error("General topic should omit thread id")
 	}
 }

@@ -45,8 +45,8 @@ tools: ["*"]
 ## Environment Variables
 
 - Core: `KROOS_BASE_URL` (default `https://api.openai.com`), `KROOS_MODEL` (default `gpt-5.4`), `KROOS_API_KEY` (optional bearer), `KROOS_LLM_TIMEOUT` (default `5m`), `KROOS_SUBAGENT_LLM_TIMEOUT` (default: same as `KROOS_LLM_TIMEOUT`), `KROOS_WEBUI_PORT`, `KROOS_LOG_DIR`, `KROOS_HEARTBEAT_INTERVAL`.
-- iMessage (BlueBubbles): `KROOS_IMESSAGE_ENABLED`, `KROOS_IMESSAGE_SERVER_URL`, `KROOS_IMESSAGE_PASSWORD`, `KROOS_IMESSAGE_WEBHOOK_PORT`, `KROOS_IMESSAGE_WEBHOOK_PATH`, `KROOS_IMESSAGE_OWNER_HANDLES`, `KROOS_IMESSAGE_GROUP_TAG`.
-- Discord: `KROOS_DISCORD_ENABLED`, `KROOS_DISCORD_TOKEN`, `KROOS_DISCORD_OWNER_IDS`, `KROOS_DISCORD_GUILD_TAG`.
+- iMessage (BlueBubbles): `BLUEBUBBLES_ENABLED`, `BLUEBUBBLES_SERVER_URL`, `BLUEBUBBLES_PASSWORD`, `BLUEBUBBLES_WEBHOOK_PORT`, `BLUEBUBBLES_WEBHOOK_PATH`, `BLUEBUBBLES_ALLOWED_USERS`, `BLUEBUBBLES_GROUP_TAG`.
+- Discord: `DISCORD_ENABLED`, `DISCORD_BOT_TOKEN`, `DISCORD_ALLOWED_USERS`, `DISCORD_GUILD_TAG`.
 - Web search: `KROOS_BRAVE_API_KEY` or `BRAVE_API_KEY`.
 
 ## Architecture Notes
@@ -92,7 +92,7 @@ tools: ["*"]
 - Never commit real API keys, phone numbers, tokens, or live configuration values. Use obviously fake placeholders in docs, tests, and examples.
 - `.env` is loaded automatically but must never be committed.
 - Web search credentials live in `KROOS_BRAVE_API_KEY` / `BRAVE_API_KEY`.
-- Channel credentials (`KROOS_IMESSAGE_PASSWORD`, `KROOS_DISCORD_TOKEN`) stay in `.env`; do not echo them in logs or replies.
+- Channel credentials (`BLUEBUBBLES_PASSWORD`, `DISCORD_BOT_TOKEN`) stay in `.env`; do not echo them in logs or replies.
 
 ## Collaboration / Safety Notes
 

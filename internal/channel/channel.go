@@ -71,3 +71,9 @@ type Channel interface {
 	Listen(ctx context.Context, out chan<- Inbound) error
 	Send(ctx context.Context, msg Outbound) error
 }
+
+// Homer is implemented by channels with a configured home thread: the
+// default destination for deliveries that name no recipient.
+type Homer interface {
+	Home() string
+}

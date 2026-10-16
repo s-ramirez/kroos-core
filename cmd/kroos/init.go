@@ -110,19 +110,19 @@ func runInit(args []string) error {
 
 	fmt.Fprintln(out, "\n== iMessage channel (BlueBubbles) ==")
 	if promptYesNo(reader, out, "Enable iMessage channel?", false) {
-		ask("KROOS_IMESSAGE_SERVER_URL", "BlueBubbles server URL", "")
-		ask("KROOS_IMESSAGE_PASSWORD", "BlueBubbles password", "")
-		ask("KROOS_IMESSAGE_WEBHOOK_PORT", "Webhook port", "8421")
-		ask("KROOS_IMESSAGE_WEBHOOK_PATH", "Webhook path", "/bluebubbles")
-		ask("KROOS_IMESSAGE_OWNER_HANDLES", "Owner handles (comma-separated)", "")
-		ask("KROOS_IMESSAGE_GROUP_TAG", "Group tag (e.g. @kroos)", "")
+		ask("BLUEBUBBLES_SERVER_URL", "BlueBubbles server URL", "")
+		ask("BLUEBUBBLES_PASSWORD", "BlueBubbles password", "")
+		ask("BLUEBUBBLES_WEBHOOK_PORT", "Webhook port", "8421")
+		ask("BLUEBUBBLES_WEBHOOK_PATH", "Webhook path", "/bluebubbles")
+		ask("BLUEBUBBLES_ALLOWED_USERS", "Owner handles (comma-separated)", "")
+		ask("BLUEBUBBLES_GROUP_TAG", "Group tag (e.g. @kroos)", "")
 	}
 
 	fmt.Fprintln(out, "\n== Discord channel ==")
 	if promptYesNo(reader, out, "Enable Discord channel?", false) {
-		ask("KROOS_DISCORD_TOKEN", "Discord bot token", "")
-		ask("KROOS_DISCORD_OWNER_IDS", "Owner user IDs (comma-separated)", "")
-		ask("KROOS_DISCORD_GUILD_TAG", "Guild tag (e.g. @kroos)", "")
+		ask("DISCORD_BOT_TOKEN", "Discord bot token", "")
+		ask("DISCORD_ALLOWED_USERS", "Owner user IDs (comma-separated)", "")
+		ask("DISCORD_GUILD_TAG", "Guild tag (e.g. @kroos)", "")
 	}
 
 	if len(newEnv) == 0 {

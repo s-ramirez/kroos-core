@@ -95,6 +95,10 @@ type Config struct {
 	// DebounceDelay overrides the default 10-second wait used to group
 	// consecutive messages before dispatching. Zero uses the default.
 	DebounceDelay time.Duration
+
+	// HomeChannel is the default chat GUID for deliveries that name no
+	// recipient (e.g. heartbeat).
+	HomeChannel string
 }
 
 // msgPart is a single inbound message fragment waiting to be debounced.
@@ -122,33 +126,33 @@ type Channel struct {
 	privateAPI bool // private API enabled and helper connected
 }
 
-// ConfigFromEnv reads KROOS_IMESSAGE_* environment variables and returns a
+// ConfigFromEnv reads BLUEBUBBLES_* environment variables and returns a
 // populated Config along with a status reason. The channel is disabled
-// when KROOS_IMESSAGE_ENABLED is false, when the URL is missing, or when
+// when BLUEBUBBLES_ENABLED is false, when the URL is missing, or when
 // the password is missing (in which case an error is returned so the
 // caller can surface a warning).
 func ConfigFromEnv(getenv func(string) string, parseBool func(name string, def bool) bool) (*Config, string, error) {
-	if !parseBool("KROOS_IMESSAGE_ENABLED", true) {
-		return nil, "KROOS_IMESSAGE_ENABLED=false", nil
+	if !parseBool("BLUEBUBBLES_ENABLED", true) {
+		return nil, "BLUEBUBBLES_ENABLED=false", nil
 	}
-	serverURL := strings.TrimSpace(getenv("KROOS_IMESSAGE_SERVER_URL"))
+	serverURL := strings.TrimSpace(getenv("BLUEBUBBLES_SERVER_URL"))
 	if serverURL == "" {
 		return nil, "", nil
 	}
-	password := getenv("KROOS_IMESSAGE_PASSWORD")
+	password := getenv("BLUEBUBBLES_PASSWORD")
 	if password == "" {
-		return nil, "", fmt.Errorf("KROOS_IMESSAGE_SERVER_URL set but KROOS_IMESSAGE_PASSWORD is empty")
+		return nil, "", fmt.Errorf("BLUEBUBBLES_SERVER_URL set but BLUEBUBBLES_PASSWORD is empty")
 	}
 	port := defaultWebhookPort
-	if raw := getenv("KROOS_IMESSAGE_WEBHOOK_PORT"); raw != "" {
+	if raw := getenv("BLUEBUBBLES_WEBHOOK_PORT"); raw != "" {
 		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
 			port = n
 		} else {
-			return nil, "", fmt.Errorf("invalid KROOS_IMESSAGE_WEBHOOK_PORT %q", raw)
+			return nil, "", fmt.Errorf("invalid BLUEBUBBLES_WEBHOOK_PORT %q", raw)
 		}
 	}
 	var owners []string
-	if raw := getenv("KROOS_IMESSAGE_OWNER_HANDLES"); raw != "" {
+	if raw := getenv("BLUEBUBBLES_ALLOWED_USERS"); raw != "" {
 		for _, h := range strings.Split(raw, ",") {
 			if h = strings.TrimSpace(h); h != "" {
 				owners = append(owners, h)
@@ -158,14 +162,15 @@ func ConfigFromEnv(getenv func(string) string, parseBool func(name string, def b
 	return &Config{
 		ServerURL:               serverURL,
 		Password:                password,
-		WebhookPath:             getenv("KROOS_IMESSAGE_WEBHOOK_PATH"),
-		WebhookHost:             strings.TrimSpace(getenv("KROOS_IMESSAGE_WEBHOOK_HOST")),
+		WebhookPath:             getenv("BLUEBUBBLES_WEBHOOK_PATH"),
+		WebhookHost:             strings.TrimSpace(getenv("BLUEBUBBLES_WEBHOOK_HOST")),
 		WebhookPort:             port,
-		WebhookURL:              strings.TrimSpace(getenv("KROOS_IMESSAGE_WEBHOOK_URL")),
-		SkipWebhookRegistration: !parseBool("KROOS_IMESSAGE_REGISTER_WEBHOOK", true),
+		WebhookURL:              strings.TrimSpace(getenv("BLUEBUBBLES_WEBHOOK_URL")),
+		SkipWebhookRegistration: !parseBool("BLUEBUBBLES_REGISTER_WEBHOOK", true),
 		OwnerHandles:            owners,
-		GroupTag:                getenv("KROOS_IMESSAGE_GROUP_TAG"),
-		ReadReceipts:            parseBool("KROOS_IMESSAGE_READ_RECEIPTS", true),
+		GroupTag:                getenv("BLUEBUBBLES_GROUP_TAG"),
+		ReadReceipts:            parseBool("BLUEBUBBLES_READ_RECEIPTS", true),
+		HomeChannel:             strings.TrimSpace(getenv("BLUEBUBBLES_HOME_CHANNEL")),
 	}, "", nil
 }
 
@@ -201,6 +206,9 @@ func New(cfg Config) *Channel {
 }
 
 func (c *Channel) Name() string { return channelName }
+
+// Home returns the default delivery chat GUID.
+func (c *Channel) Home() string { return c.cfg.HomeChannel }
 
 // ListenAddr returns the host:port the webhook server binds to.
 func (c *Channel) ListenAddr() string {

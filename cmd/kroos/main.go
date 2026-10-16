@@ -234,6 +234,12 @@ func main() {
 	} else if tgReason != "" {
 		fmt.Fprintf(os.Stderr, "Telegram channel disabled (%s)\n", tgReason)
 	}
+	if discordCfg != nil && discordCfg.AllowAll {
+		fmt.Fprintln(os.Stderr, "warning: DISCORD_ALLOW_ALL_USERS=true — anyone can use the agent and its tools")
+	}
+	if telegramCfg != nil && telegramCfg.AllowAll {
+		fmt.Fprintln(os.Stderr, "warning: TELEGRAM_ALLOW_ALL_USERS=true — anyone can use the agent and its tools")
+	}
 
 	// Profiles with senders: any open their bound group threads to non-owners.
 	for _, p := range profiles {
@@ -260,6 +266,7 @@ func main() {
 		tools.NewFindTool(searchDelegationGuidelines...),
 		tools.NewWebFetchTool(),
 		tools.NewWebSearchTool(),
+		tools.NewSecretTool(filepath.Join(cwd, ".env")),
 		tools.NewMemoryToolResolving(func() *memory.Store {
 			if runnerRef != nil {
 				return runnerRef.ActiveMemoryStore()
@@ -293,6 +300,9 @@ func main() {
 			to := d.To
 			if d.Target == clichannel.Name && to == "" {
 				to = clichannel.DefaultThread
+			}
+			if h, ok := ch.(channel.Homer); ok && to == "" {
+				to = h.Home()
 			}
 			if to == "" {
 				return fmt.Errorf("delivery target %q needs deliver_to", d.Target)
@@ -611,8 +621,19 @@ func main() {
 			Scheduler: scheduler,
 			Target:    channel.Key{Channel: clichannel.Name, Thread: clichannel.DefaultThread},
 		}
-		if hbCfg.Interval > 0 && hbCfg.Target != clichannel.Name && hbCfg.Target != "none" && hbCfg.To == "" {
-			fmt.Fprintf(os.Stderr, "warning: heartbeat target=%s needs KROOS_HEARTBEAT_TO; replies will fail to deliver\n", hbCfg.Target)
+		hasHome := func(target string) bool {
+			switch target {
+			case "imessage":
+				return imsgCfg != nil && imsgCfg.HomeChannel != ""
+			case "discord":
+				return discordCfg != nil && discordCfg.HomeChannel != ""
+			case "telegram":
+				return telegramCfg != nil && telegramCfg.HomeChannel != ""
+			}
+			return false
+		}
+		if hbCfg.Interval > 0 && hbCfg.Target != clichannel.Name && hbCfg.Target != "none" && hbCfg.To == "" && !hasHome(hbCfg.Target) {
+			fmt.Fprintf(os.Stderr, "warning: heartbeat target=%s needs KROOS_HEARTBEAT_TO or a home channel; replies will fail to deliver\n", hbCfg.Target)
 		}
 		schedCh.RunTask = func(ev schedule.Event) {
 			if _, ok := taskExecutor.Submit(tasks.FromEvent(ev)); !ok {

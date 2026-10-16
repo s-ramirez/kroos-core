@@ -42,6 +42,14 @@ type Config struct {
 	// owners) may address the bot. The mention/tag requirement still
 	// applies. Populated from profiles with senders: any.
 	OpenChannels []string
+
+	// AllowAll lets any user address the bot, DMs included. Mention/tag
+	// gating in guild channels still applies.
+	AllowAll bool
+
+	// HomeChannel is the default channel ID for deliveries that name no
+	// recipient (e.g. heartbeat).
+	HomeChannel string
 }
 
 // Channel implements channel.Channel for Discord.
@@ -61,23 +69,23 @@ func New(cfg Config) *Channel {
 	return &Channel{cfg: cfg, http: &http.Client{Timeout: time.Minute}}
 }
 
-// ConfigFromEnv reads KROOS_DISCORD_* environment variables and returns a
+// ConfigFromEnv reads DISCORD_* environment variables and returns a
 // populated Config along with a reason string when the channel should be
 // disabled. Returns (nil, "", nil) if disabled without explanation (e.g.
 // no token). Errors only when a value is present but malformed.
 //
 // The second return (disabledReason) is non-empty when the channel is
-// explicitly disabled via KROOS_DISCORD_ENABLED=false so the caller can log it.
+// explicitly disabled via DISCORD_ENABLED=false so the caller can log it.
 func ConfigFromEnv(getenv func(string) string, parseBool func(name string, def bool) bool) (*Config, string, error) {
-	if !parseBool("KROOS_DISCORD_ENABLED", true) {
-		return nil, "KROOS_DISCORD_ENABLED=false", nil
+	if !parseBool("DISCORD_ENABLED", true) {
+		return nil, "DISCORD_ENABLED=false", nil
 	}
-	token := strings.TrimSpace(getenv("KROOS_DISCORD_TOKEN"))
+	token := strings.TrimSpace(getenv("DISCORD_BOT_TOKEN"))
 	if token == "" {
 		return nil, "", nil
 	}
 	var owners []string
-	if raw := getenv("KROOS_DISCORD_OWNER_IDS"); raw != "" {
+	if raw := getenv("DISCORD_ALLOWED_USERS"); raw != "" {
 		for _, id := range strings.Split(raw, ",") {
 			if id = strings.TrimSpace(id); id != "" {
 				owners = append(owners, id)
@@ -87,11 +95,16 @@ func ConfigFromEnv(getenv func(string) string, parseBool func(name string, def b
 	return &Config{
 		Token:    token,
 		OwnerIDs: owners,
-		GuildTag: getenv("KROOS_DISCORD_GUILD_TAG"),
+		GuildTag:    getenv("DISCORD_GUILD_TAG"),
+		AllowAll:    parseBool("DISCORD_ALLOW_ALL_USERS", false),
+		HomeChannel: strings.TrimSpace(getenv("DISCORD_HOME_CHANNEL")),
 	}, "", nil
 }
 
 func (c *Channel) Name() string { return channelName }
+
+// Home returns the default delivery channel ID.
+func (c *Channel) Home() string { return c.cfg.HomeChannel }
 
 // Listen opens the Discord gateway connection and forwards qualifying
 // messages onto out. It blocks until ctx is cancelled.
@@ -264,7 +277,7 @@ func (c *Channel) accept(m *discordgo.Message, botID string) (string, string) {
 	isDM := m.GuildID == ""
 	owner := c.isOwner(m.Author.ID)
 	open := !isDM && c.isOpen(m.ChannelID)
-	if !owner && !open {
+	if !owner && !open && !c.cfg.AllowAll {
 		return "", "non-owner"
 	}
 	if isDM {
