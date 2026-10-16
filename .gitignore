@@ -23,3 +23,6 @@
 # OS
 .DS_Store
 Thumbs.db
+
+# Deploy build output
+/bin/
