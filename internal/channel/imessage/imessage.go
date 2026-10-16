@@ -333,6 +333,23 @@ func (c *Channel) chatAction(method, chatGUID, action string) {
 	}()
 }
 
+// StartTyping shows the typing indicator in chatGUID (channel.Typer).
+// Needs the BlueBubbles private API and ReadReceipts; otherwise a no-op.
+func (c *Channel) StartTyping(ctx context.Context, chatGUID string) error {
+	if !c.cfg.ReadReceipts || !c.privateAPIEnabled() {
+		return nil
+	}
+	return c.api.chatAction(ctx, http.MethodPost, chatGUID, "typing")
+}
+
+// StopTyping clears the typing indicator (channel.Typer).
+func (c *Channel) StopTyping(ctx context.Context, chatGUID string) error {
+	if !c.cfg.ReadReceipts || !c.privateAPIEnabled() {
+		return nil
+	}
+	return c.api.chatAction(ctx, http.MethodDelete, chatGUID, "typing")
+}
+
 // Send delivers a reply via the BlueBubbles REST API. Attachments are
 // uploaded first. The text is stripped of Markdown, meta-lines (e.g.
 // "[tokens: ...]") are dropped, and each paragraph is sent as its own
@@ -657,7 +674,6 @@ func (c *Channel) debounceWorker(ctx context.Context, chatGUID string, ch <-chan
 			if len(participants) > 0 {
 				content = fmt.Sprintf("[group participants: %s]\n%s", strings.Join(participants, ", "), body)
 			}
-			c.chatAction(http.MethodPost, chatGUID, "typing")
 			select {
 			case <-ctx.Done():
 			case out <- channel.Inbound{

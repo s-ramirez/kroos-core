@@ -516,6 +516,7 @@ func (r *Runner) agentLoop(
 				continue
 			}
 
+			channel.ReportTool(ctx, call.Function.Name, rawArgs)
 			result, err := tool.Execute(ctx, rawArgs)
 			r.Registry.RunAfterHooks(hctx, call.Function.Name, rawArgs, result, err)
 

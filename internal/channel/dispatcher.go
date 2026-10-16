@@ -18,6 +18,10 @@ var (
 	listenHealthy    = time.Minute // uptime after which backoff resets
 )
 
+// typingRefresh re-sends the typing indicator during long turns (iMessage's
+// indicator expires on its own).
+var typingRefresh = 25 * time.Second
+
 // ReplyFunc sends text back through the originating channel/thread.
 type ReplyFunc func(text string) error
 
@@ -43,6 +47,9 @@ type Dispatcher struct {
 	// SlashCommands handles "/<name> [args]" inputs (e.g. "model", "doctor")
 	// before expansion; the returned text is the reply.
 	SlashCommands map[string]SlashCommand
+	// ToolProgress shows a live, edited tool-call message per turn on
+	// channels that implement Editor.
+	ToolProgress bool
 	// Health, if set, receives listener failures/recoveries ("channel:<name>")
 	// and can restart a listener immediately.
 	Health      *health.Monitor
@@ -142,7 +149,25 @@ func (d *Dispatcher) process(ctx context.Context, in Inbound) {
 	defer func() { conv.Attachments = nil }()
 
 	reply := d.replyFuncFor(ctx, in.Channel, in.Thread, in.MessageID)
-	if err := d.Handler.HandleTurn(ctx, conv, content, reply); err != nil {
+	turnCtx := ctx
+	ch, _ := d.Channels.Lookup(in.Channel)
+	progressShown := false
+	if ed, ok := ch.(Editor); ok && d.ToolProgress {
+		progressShown = true
+		progress := newToolProgress(ctx, ed, in.Thread, in.MessageID, d.logf)
+		turnCtx = WithToolReporter(ctx, progress.Add)
+		send := reply
+		// Settle the progress message before any reply so it never lands after the answer.
+		reply = func(text string) error {
+			progress.Flush()
+			return send(text)
+		}
+		defer progress.Flush()
+	}
+	if ty, ok := ch.(Typer); ok && !progressShown {
+		defer d.keepTyping(ctx, ty, in.Thread)()
+	}
+	if err := d.Handler.HandleTurn(turnCtx, conv, content, reply); err != nil {
 		_ = reply(fmt.Sprintf("error: %v\n", err))
 	}
 
@@ -232,4 +257,42 @@ func (d *Dispatcher) matchSlash(input string) (SlashCommand, string, bool) {
 		}
 	}
 	return nil, "", false
+}
+
+// keepTyping shows the typing indicator until the returned stop is called,
+// refreshing it so it survives long turns (and reappears after mid-turn
+// replies, which clear it).
+func (d *Dispatcher) keepTyping(ctx context.Context, ty Typer, thread string) (stop func()) {
+	start := func() {
+		c, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		if err := ty.StartTyping(c, thread); err != nil {
+			d.logf("typing: %v", err)
+		}
+	}
+	start()
+	done := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		t := time.NewTicker(typingRefresh)
+		defer t.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				start()
+			}
+		}
+	}()
+	return func() {
+		close(done)
+		<-finished
+		c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = ty.StopTyping(c, thread)
+	}
 }

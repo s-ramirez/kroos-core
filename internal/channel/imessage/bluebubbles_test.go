@@ -247,6 +247,10 @@ func TestReadReceiptAndTyping(t *testing.T) {
 	h := ch.makeHandler(context.Background(), out)
 	post(t, h, makeNewMessagePayload("+15551234567", "hi", "iMessage;-;+15551234567", false))
 	<-out
+	// The dispatcher drives typing for the turn via channel.Typer.
+	if err := ch.StartTyping(context.Background(), "iMessage;-;+15551234567"); err != nil {
+		t.Fatal(err)
+	}
 	_ = ch.Send(context.Background(), channel.Outbound{Thread: "iMessage;-;+15551234567", Content: "yo"})
 
 	want := []string{
@@ -349,5 +353,16 @@ func TestResolveChat(t *testing.T) {
 	guid, _ = c.ResolveChat(context.Background(), "nobody@example.com")
 	if guid != "" {
 		t.Errorf("unknown handle resolved to %q", guid)
+	}
+}
+
+func TestTypingNoopWithoutPrivateAPI(t *testing.T) {
+	f, srv := newFakeBB(t, "secret")
+	ch := New(Config{ServerURL: srv.URL, Password: "secret", ReadReceipts: true})
+	if err := ch.StartTyping(context.Background(), "iMessage;-;x"); err != nil {
+		t.Fatal(err)
+	}
+	if calls, _, _ := f.snapshot(); len(calls) != 0 {
+		t.Fatalf("typing called without private API: %v", calls)
 	}
 }

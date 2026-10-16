@@ -93,8 +93,8 @@ func ConfigFromEnv(getenv func(string) string, parseBool func(name string, def b
 		}
 	}
 	return &Config{
-		Token:    token,
-		OwnerIDs: owners,
+		Token:       token,
+		OwnerIDs:    owners,
 		GuildTag:    getenv("DISCORD_GUILD_TAG"),
 		AllowAll:    parseBool("DISCORD_ALLOW_ALL_USERS", false),
 		HomeChannel: strings.TrimSpace(getenv("DISCORD_HOME_CHANNEL")),
@@ -166,6 +166,32 @@ func (c *Channel) Send(ctx context.Context, msg channel.Outbound) error {
 		ref = nil
 	}
 	return nil
+}
+
+// SendEditable posts text and returns its message ID (channel.Editor).
+func (c *Channel) SendEditable(ctx context.Context, thread, text, replyTo string) (string, error) {
+	if c.session == nil {
+		return "", fmt.Errorf("discord: session not initialized")
+	}
+	var ref *discordgo.MessageReference
+	if _, guild := c.guildChannels.Load(thread); guild && replyTo != "" {
+		fail := false
+		ref = &discordgo.MessageReference{MessageID: replyTo, ChannelID: thread, FailIfNotExists: &fail}
+	}
+	m, err := c.session.ChannelMessageSendComplex(thread, &discordgo.MessageSend{Content: text, Reference: ref}, discordgo.WithContext(ctx))
+	if err != nil {
+		return "", err
+	}
+	return m.ID, nil
+}
+
+// Edit replaces a message's text (channel.Editor).
+func (c *Channel) Edit(ctx context.Context, thread, id, text string) error {
+	if c.session == nil {
+		return fmt.Errorf("discord: session not initialized")
+	}
+	_, err := c.session.ChannelMessageEdit(thread, id, text, discordgo.WithContext(ctx))
+	return err
 }
 
 // sendFiles uploads local files in one message (Discord allows 10).

@@ -678,9 +678,10 @@ func main() {
 			"model":  sessionModelCommand(providers, modelChoice{provider, displayModel(providers, model)}),
 			"doctor": doctorCommand(taskExecutor, monitor, doctorProgress),
 		},
-		Health:      monitor,
-		Handler:     &channel.Router{Default: &runner, Routes: routes},
-		OnUserInput: func() { userActivity = true },
+		Health:       monitor,
+		ToolProgress: envBool("KROOS_TOOL_PROGRESS", true),
+		Handler:      &channel.Router{Default: &runner, Routes: routes},
+		OnUserInput:  func() { userActivity = true },
 		Logger: func(format string, args ...any) {
 			fmt.Fprintf(os.Stderr, "[dispatcher] "+format+"\n", args...)
 		},

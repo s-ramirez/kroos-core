@@ -126,6 +126,26 @@ In a session:
 
 The `/model` choice is per conversation and persists with its history.
 
+## Tool progress (Discord) and typing (iMessage)
+
+On Discord each turn shows its work live: one message lists the tools kroos is
+running, and it's edited as more run. The answer comes as the next message.
+
+```
+💻 terminal
+```
+git -C ~/kroos-core log --oneline -5
+``` (×2)
+📖 Reading agent.log L1560-1619
+🌐 Fetching discord.com/api/v10/gateway
+```
+
+Turn it off with `kroos config set tool_progress false`.
+
+On iMessage, which can't edit messages, kroos shows the typing indicator for
+the whole turn instead, refreshing it during long tool runs. It needs the
+BlueBubbles private API and `imessage.read_receipts` (on by default).
+
 ## Self-healing
 
 Kroos keeps running when parts of it fail, and can fix itself with your approval:

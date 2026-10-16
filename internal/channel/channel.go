@@ -79,6 +79,14 @@ type Terminal interface {
 	Terminal() bool
 }
 
+// Typer is implemented by channels that can show a "typing" indicator.
+// The dispatcher keeps it on for the whole turn (refreshing it) on channels
+// without a live tool-progress message.
+type Typer interface {
+	StartTyping(ctx context.Context, thread string) error
+	StopTyping(ctx context.Context, thread string) error
+}
+
 // Homer is implemented by channels with a configured home thread: the
 // default destination for deliveries that name no recipient.
 type Homer interface {

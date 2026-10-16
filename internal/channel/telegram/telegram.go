@@ -95,8 +95,8 @@ func ConfigFromEnv(getenv func(string) string, parseBool func(name string, def b
 		}
 	}
 	return &Config{
-		Token:    token,
-		OwnerIDs: owners,
+		Token:        token,
+		OwnerIDs:     owners,
 		GroupTag:     getenv("TELEGRAM_GROUP_TAG"),
 		AllowAll:     parseBool("TELEGRAM_ALLOW_ALL_USERS", false),
 		HomeChannel:  strings.TrimSpace(getenv("TELEGRAM_HOME_CHANNEL")),
