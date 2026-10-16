@@ -72,6 +72,19 @@ func (s *Scheduler) Inject(job Job) {
 	s.mu.Unlock()
 }
 
+// Synthetic returns a copy of the in-memory built-in jobs (heartbeat,
+// curator). Nil-safe.
+func (s *Scheduler) Synthetic() []Job {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]Job, len(s.synthetic))
+	copy(out, s.synthetic)
+	return out
+}
+
 // Start launches the ticker goroutine. It runs until ctx is cancelled or
 // Stop is called.
 func (s *Scheduler) Start(ctx context.Context) {

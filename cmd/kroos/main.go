@@ -303,7 +303,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "[tasks] "+format+"\n", args...)
 	}
 	if scheduleStore != nil {
-		builtinTools = append(builtinTools, tools.NewTaskTool(scheduleStore, taskExecutor))
+		builtinTools = append(builtinTools, tools.NewTaskTool(scheduleStore, taskExecutor, scheduler))
 	}
 	if imsgCfg != nil || discordCfg != nil || telegramCfg != nil {
 		builtinTools = append(builtinTools, tools.NewSendFileTool(func(ctx context.Context, out channel.Outbound) error {

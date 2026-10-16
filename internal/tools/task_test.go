@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/s-ramirez/kroos-core/internal/channel"
 	"github.com/s-ramirez/kroos-core/internal/schedule"
@@ -27,7 +28,7 @@ func newTaskTool(t *testing.T) (*TaskTool, *schedule.Store, *tasks.Executor) {
 	exec := tasks.NewExecutor(context.Background(), t.TempDir(), func(tasks.Task) (tasks.AgentSpec, error) {
 		return tasks.AgentSpec{Agent: echoAgent{}}, nil
 	}, nil)
-	return NewTaskTool(store, exec), store, exec
+	return NewTaskTool(store, exec, nil), store, exec
 }
 
 func runTask(t *testing.T, tool *TaskTool, ctx context.Context, p TaskParams) ToolResult {
@@ -101,5 +102,37 @@ func TestTaskRunNowAndHistory(t *testing.T) {
 	}
 	if res := runTask(t, tool, ctx, TaskParams{Action: "list"}); res.Output != "no scheduled tasks" {
 		t.Fatalf("expected empty list, got %s", res.Output)
+	}
+}
+
+func TestTaskRunNowBuiltin(t *testing.T) {
+	store, err := schedule.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotAgent string
+	exec := tasks.NewExecutor(context.Background(), t.TempDir(), func(task tasks.Task) (tasks.AgentSpec, error) {
+		gotAgent = task.Agent
+		return tasks.AgentSpec{Agent: echoAgent{}}, nil
+	}, nil)
+	sched := schedule.NewScheduler(store, 1)
+	anchor := time.Now().Add(time.Hour)
+	sched.Inject(schedule.Job{ID: "curator", Name: "skill-curator", Enabled: true, Mode: schedule.ModeTask, Agent: "curator",
+		Text: "curate", Schedule: schedule.Schedule{Kind: schedule.KindEvery, Every: schedule.Duration(time.Hour), Anchor: &anchor}})
+	tool := NewTaskTool(store, exec, sched)
+	ctx := context.Background()
+
+	if res := runTask(t, tool, ctx, TaskParams{Action: "list"}); !strings.Contains(res.Output, "(built-in)") {
+		t.Fatalf("expected built-in in list: %s", res.Output)
+	}
+	if res := runTask(t, tool, ctx, TaskParams{Action: "run_now", ID: "curator"}); res.IsError {
+		t.Fatal(res.Output)
+	}
+	exec.Wait()
+	if gotAgent != "curator" {
+		t.Fatalf("expected curator agent, got %q", gotAgent)
+	}
+	if res := runTask(t, tool, ctx, TaskParams{Action: "remove", ID: "curator"}); !res.IsError {
+		t.Fatal("removing a built-in should fail")
 	}
 }

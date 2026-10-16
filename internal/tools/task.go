@@ -16,14 +16,16 @@ import (
 // tasks (isolated agent runs with delivery) and reminders (events
 // injected into the main conversation). One tool, action enum.
 type TaskTool struct {
-	store    *schedule.Store
-	executor *tasks.Executor
+	store     *schedule.Store
+	executor  *tasks.Executor
+	scheduler *schedule.Scheduler
 }
 
 // NewTaskTool returns the task tool. executor may be nil, which disables
-// run_now and history.
-func NewTaskTool(store *schedule.Store, executor *tasks.Executor) *TaskTool {
-	return &TaskTool{store: store, executor: executor}
+// run_now and history. scheduler, if set, exposes built-in (synthetic)
+// jobs such as heartbeat and curator to list and run_now.
+func NewTaskTool(store *schedule.Store, executor *tasks.Executor, scheduler *schedule.Scheduler) *TaskTool {
+	return &TaskTool{store: store, executor: executor, scheduler: scheduler}
 }
 
 var taskDefinition = ToolDefinition{
@@ -31,7 +33,7 @@ var taskDefinition = ToolDefinition{
 	Description: "Schedule and manage background work. mode=task (default) runs the prompt later in an isolated background agent " +
 		"(fresh context, its own tools) and sends its reply to the user — e.g. \"every 6h check the price of flight X and message me if under $400\". " +
 		"mode=remind injects the prompt into this conversation when it fires (\"remind me in 15m\"). " +
-		"Actions: add, list, remove, run_now (run a job, or an ad-hoc prompt, immediately in the background), history (recent runs).",
+		"Actions: add, list, remove, run_now (run a job — including built-ins like heartbeat and curator — or an ad-hoc prompt, immediately in the background), history (recent runs).",
 	Guidelines: []string{
 		"Write task prompts as self-contained instructions: the background agent sees none of this conversation. Include the exact goal, thresholds, and what to say when it fires.",
 		"Background agents reply " + tasks.NothingToReport + " to stay silent, so for watch-style tasks state the condition that warrants a message (\"only message me if the price is under $400 or dropped since last check\").",
@@ -199,7 +201,7 @@ func resolveDelivery(ctx context.Context, p TaskParams) schedule.Delivery {
 }
 
 func (t *TaskTool) handleList() (ToolResult, error) {
-	jobs := t.store.List()
+	jobs := append(t.store.List(), t.scheduler.Synthetic()...)
 	if len(jobs) == 0 {
 		return ToolResult{Output: "no scheduled tasks"}, nil
 	}
@@ -216,6 +218,9 @@ func (t *TaskTool) handleList() (ToolResult, error) {
 func (t *TaskTool) handleRemove(p TaskParams) (ToolResult, error) {
 	if p.ID == "" {
 		return errorResult("id is required for remove"), nil
+	}
+	if j, ok := t.findJob(p.ID); ok && j.Synthetic {
+		return errorResultf("%q is a built-in job; disable it via config instead", p.ID), nil
 	}
 	ok, err := t.store.Remove(p.ID)
 	if err != nil {
@@ -285,7 +290,7 @@ func (t *TaskTool) handleHistory(p TaskParams) (ToolResult, error) {
 }
 
 func (t *TaskTool) findJob(id string) (schedule.Job, bool) {
-	for _, j := range t.store.List() {
+	for _, j := range append(t.store.List(), t.scheduler.Synthetic()...) {
 		if j.ID == id {
 			return j, true
 		}
@@ -318,7 +323,11 @@ func formatJobBlock(j schedule.Job) string {
 	if !j.Enabled {
 		enabled = "disabled"
 	}
-	fmt.Fprintf(&b, "[%s] %q %s — %s, next %s, %s\n", j.ID, j.Name, jobMode(j), DescribeSchedule(j.Schedule), next, enabled)
+	builtin := ""
+	if j.Synthetic {
+		builtin = " (built-in)"
+	}
+	fmt.Fprintf(&b, "[%s] %q %s%s — %s, next %s, %s\n", j.ID, j.Name, jobMode(j), builtin, DescribeSchedule(j.Schedule), next, enabled)
 	if j.Mode == schedule.ModeTask {
 		fmt.Fprintf(&b, "  deliver: %s\n", describeDelivery(j.Deliver))
 	}
