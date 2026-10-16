@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"yak-go/internal/memory"
+	"github.com/s-ramirez/kroos-core/internal/memory"
 )
 
 func newTestStore(t *testing.T) *memory.Store {

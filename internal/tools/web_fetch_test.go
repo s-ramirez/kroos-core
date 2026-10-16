@@ -25,7 +25,7 @@ func TestWebFetchToolExtractsReadableHTML(t *testing.T) {
 					StatusCode: http.StatusOK,
 					Header:     http.Header{"Content-Type": []string{"text/html; charset=utf-8"}},
 					Body: io.NopCloser(strings.NewReader(
-						`<!doctype html><html><head><title>Yak</title></head><body><article><h1>Yak</h1><p>Hello <b>world</b>.</p></article></body></html>`,
+						`<!doctype html><html><head><title>Kroos</title></head><body><article><h1>Kroos</h1><p>Hello <b>world</b>.</p></article></body></html>`,
 					)),
 					Request: r,
 				}, nil
@@ -34,7 +34,7 @@ func TestWebFetchToolExtractsReadableHTML(t *testing.T) {
 	}
 
 	tool := NewWebFetchTool()
-	raw, _ := json.Marshal(WebFetchParams{URL: "https://example.com/yak"})
+	raw, _ := json.Marshal(WebFetchParams{URL: "https://example.com/kroos"})
 
 	result, err := tool.Execute(context.Background(), raw)
 	if err != nil {
@@ -43,7 +43,7 @@ func TestWebFetchToolExtractsReadableHTML(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("unexpected error result: %s", result.Output)
 	}
-	if !strings.Contains(result.Output, `"title": "Yak"`) {
+	if !strings.Contains(result.Output, `"title": "Kroos"`) {
 		t.Fatalf("expected title in output, got %q", result.Output)
 	}
 	if !strings.Contains(result.Output, `Hello world`) {

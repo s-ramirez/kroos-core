@@ -111,7 +111,11 @@ func (d *Dispatcher) process(ctx context.Context, in Inbound) {
 
 	// Propagate per-message model override; cleared after the turn.
 	conv.ModelOverride = in.ModelOverride
-	defer func() { conv.ModelOverride = "" }()
+	conv.Attachments = in.Attachments
+	defer func() {
+		conv.ModelOverride = ""
+		conv.Attachments = nil
+	}()
 
 	// Snapshot message count before the turn so InterceptReply can prune it.
 	preTurnLen := len(conv.Messages)
@@ -127,7 +131,7 @@ func (d *Dispatcher) process(ctx context.Context, in Inbound) {
 			return err
 		}
 	} else {
-		reply = d.replyFuncFor(ctx, in.Channel, in.Thread)
+		reply = d.replyFuncFor(ctx, in.Channel, in.Thread, in.MessageID)
 	}
 
 	if err := d.Handler.HandleTurn(ctx, conv, content, reply); err != nil {
@@ -144,9 +148,14 @@ func (d *Dispatcher) process(ctx context.Context, in Inbound) {
 	}
 }
 
-func (d *Dispatcher) replyFuncFor(ctx context.Context, chName, thread string) ReplyFunc {
+func (d *Dispatcher) replyFuncFor(ctx context.Context, chName, thread, replyTo string) ReplyFunc {
 	return func(text string) error {
-		return d.replyText(ctx, chName, thread, text)
+		ch, ok := d.Channels.Lookup(chName)
+		if !ok {
+			d.logf("reply channel %q not found", chName)
+			return nil
+		}
+		return ch.Send(ctx, Outbound{Channel: chName, Thread: thread, Content: text, ReplyTo: replyTo})
 	}
 }
 

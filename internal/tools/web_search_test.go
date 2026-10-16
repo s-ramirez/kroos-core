@@ -14,26 +14,26 @@ import (
 func TestWebSearchToolReturnsNormalizedResults(t *testing.T) {
 	previousEndpoint := webSearchEndpoint
 	previousClient := webSearchHTTPClient
-	t.Setenv("YAK_BRAVE_API_KEY", "test-key")
+	t.Setenv("KROOS_BRAVE_API_KEY", "test-key")
 	webSearchEndpoint = "https://search.example.test/res/v1/web/search"
 	webSearchHTTPClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			if got := r.Header.Get("X-Subscription-Token"); got != "test-key" {
 				t.Fatalf("unexpected API key header: %q", got)
 			}
-			if got := r.URL.Query().Get("q"); got != "yak tool loop" {
+			if got := r.URL.Query().Get("q"); got != "kroos tool loop" {
 				t.Fatalf("unexpected query: %q", got)
 			}
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 				Body: io.NopCloser(strings.NewReader(`{
-					"query": {"original": "yak tool loop", "more_results_available": true},
+					"query": {"original": "kroos tool loop", "more_results_available": true},
 					"web": {
 						"results": [
 							{
-								"title": "Yak docs",
-								"url": "https://example.com/yak",
+								"title": "Kroos docs",
+								"url": "https://example.com/kroos",
 								"description": "Primary result",
 								"extra_snippets": ["Extra context"],
 								"profile": {"name": "example.com"}
@@ -51,7 +51,7 @@ func TestWebSearchToolReturnsNormalizedResults(t *testing.T) {
 	}()
 
 	tool := NewWebSearchTool()
-	raw, _ := json.Marshal(WebSearchParams{Query: "yak tool loop", Count: 3})
+	raw, _ := json.Marshal(WebSearchParams{Query: "kroos tool loop", Count: 3})
 
 	result, err := tool.Execute(context.Background(), raw)
 	if err != nil {
@@ -62,10 +62,10 @@ func TestWebSearchToolReturnsNormalizedResults(t *testing.T) {
 	}
 	for _, fragment := range []string{
 		`"provider": "brave"`,
-		`"query": "yak tool loop"`,
+		`"query": "kroos tool loop"`,
 		`"moreResultsAvailable": true`,
-		`"title": "Yak docs"`,
-		`"url": "https://example.com/yak"`,
+		`"title": "Kroos docs"`,
+		`"url": "https://example.com/kroos"`,
 	} {
 		if !strings.Contains(result.Output, fragment) {
 			t.Fatalf("expected output to contain %q, got %q", fragment, result.Output)
@@ -76,14 +76,14 @@ func TestWebSearchToolReturnsNormalizedResults(t *testing.T) {
 func TestWebSearchToolHandlesGzipResponses(t *testing.T) {
 	previousEndpoint := webSearchEndpoint
 	previousClient := webSearchHTTPClient
-	t.Setenv("YAK_BRAVE_API_KEY", "test-key")
+	t.Setenv("KROOS_BRAVE_API_KEY", "test-key")
 	webSearchEndpoint = "https://search.example.test/res/v1/web/search"
 	webSearchHTTPClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			var buf bytes.Buffer
 			gz := gzip.NewWriter(&buf)
 			_, err := gz.Write([]byte(`{
-				"query": {"original": "yak tool loop", "more_results_available": false},
+				"query": {"original": "kroos tool loop", "more_results_available": false},
 				"web": {
 					"results": [
 						{
@@ -118,7 +118,7 @@ func TestWebSearchToolHandlesGzipResponses(t *testing.T) {
 	}()
 
 	tool := NewWebSearchTool()
-	raw, _ := json.Marshal(WebSearchParams{Query: "yak tool loop", Count: 1})
+	raw, _ := json.Marshal(WebSearchParams{Query: "kroos tool loop", Count: 1})
 
 	result, err := tool.Execute(context.Background(), raw)
 	if err != nil {
@@ -138,11 +138,11 @@ func TestWebSearchToolHandlesGzipResponses(t *testing.T) {
 }
 
 func TestWebSearchToolRequiresAPIKey(t *testing.T) {
-	t.Setenv("YAK_BRAVE_API_KEY", "")
+	t.Setenv("KROOS_BRAVE_API_KEY", "")
 	t.Setenv("BRAVE_API_KEY", "")
 
 	tool := NewWebSearchTool()
-	raw, _ := json.Marshal(WebSearchParams{Query: "yak"})
+	raw, _ := json.Marshal(WebSearchParams{Query: "kroos"})
 
 	result, err := tool.Execute(context.Background(), raw)
 	if err != nil {
@@ -151,7 +151,7 @@ func TestWebSearchToolRequiresAPIKey(t *testing.T) {
 	if !result.IsError {
 		t.Fatalf("expected error result, got %q", result.Output)
 	}
-	if !strings.Contains(result.Output, "requires YAK_BRAVE_API_KEY or BRAVE_API_KEY") {
+	if !strings.Contains(result.Output, "requires KROOS_BRAVE_API_KEY or BRAVE_API_KEY") {
 		t.Fatalf("unexpected output: %q", result.Output)
 	}
 }

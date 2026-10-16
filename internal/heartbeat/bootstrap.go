@@ -5,14 +5,14 @@ import (
 	"io"
 	"time"
 
-	"yak-go/internal/schedule"
+	"github.com/s-ramirez/kroos-core/internal/schedule"
 )
 
 // Config captures the runtime-configurable bits of the heartbeat loop.
 // A Config with Interval == 0 means the heartbeat is disabled.
 type Config struct {
 	Interval time.Duration // cadence; 0 disables the heartbeat
-	Target   string        // "cli" | "imessage" | "discord" | "none"
+	Target   string        // "cli" | "imessage" | "discord" | "telegram" | "none"
 	To       string        // recipient handle/channel id for non-CLI targets
 	Model    string        // model override for heartbeat turns; "" = default
 	Prompt   string        // user-visible text sent each tick
@@ -26,35 +26,35 @@ type Config struct {
 // DefaultPrompt is the nudge sent every heartbeat tick.
 const DefaultPrompt = "Heartbeat tick: if there is nothing actionable, reply HEARTBEAT_OK."
 
-// ConfigFromEnv reads YAK_HEARTBEAT_* and returns a Config.
+// ConfigFromEnv reads KROOS_HEARTBEAT_* and returns a Config.
 // Returns (Config{}, nil) when the heartbeat is disabled (interval unset).
 // An error is returned when the interval is present but malformed.
 func ConfigFromEnv(getenv func(string) string) (Config, error) {
-	interval := getenv("YAK_HEARTBEAT_INTERVAL")
+	interval := getenv("KROOS_HEARTBEAT_INTERVAL")
 	if interval == "" {
 		return Config{}, nil
 	}
 	d, err := time.ParseDuration(interval)
 	if err != nil || d <= 0 {
-		return Config{}, fmt.Errorf("invalid YAK_HEARTBEAT_INTERVAL %q", interval)
+		return Config{}, fmt.Errorf("invalid KROOS_HEARTBEAT_INTERVAL %q", interval)
 	}
-	target := getenv("YAK_HEARTBEAT_TARGET")
+	target := getenv("KROOS_HEARTBEAT_TARGET")
 	if target == "" {
 		target = "cli"
 	}
-	prompt := getenv("YAK_HEARTBEAT_PROMPT")
+	prompt := getenv("KROOS_HEARTBEAT_PROMPT")
 	if prompt == "" {
 		prompt = DefaultPrompt
 	}
 	return Config{
 		Interval:    d,
 		Target:      target,
-		To:          getenv("YAK_HEARTBEAT_TO"),
-		Model:       getenv("YAK_HEARTBEAT_MODEL"),
+		To:          getenv("KROOS_HEARTBEAT_TO"),
+		Model:       getenv("KROOS_HEARTBEAT_MODEL"),
 		Prompt:      prompt,
-		ActiveStart: getenv("YAK_HEARTBEAT_ACTIVE_HOURS_START"),
-		ActiveEnd:   getenv("YAK_HEARTBEAT_ACTIVE_HOURS_END"),
-		Timezone:    getenv("YAK_HEARTBEAT_TIMEZONE"),
+		ActiveStart: getenv("KROOS_HEARTBEAT_ACTIVE_HOURS_START"),
+		ActiveEnd:   getenv("KROOS_HEARTBEAT_ACTIVE_HOURS_END"),
+		Timezone:    getenv("KROOS_HEARTBEAT_TIMEZONE"),
 	}, nil
 }
 

@@ -102,7 +102,7 @@ func (t *WebFetchTool) Execute(ctx context.Context, raw json.RawMessage) (ToolRe
 	if err != nil {
 		return errorResultf("failed to build request: %v", err), nil
 	}
-	req.Header.Set("User-Agent", "yak-go/1.0")
+	req.Header.Set("User-Agent", "github.com/s-ramirez/kroos-core/1.0")
 	req.Header.Set("Accept", "text/html, text/plain;q=0.9, application/xhtml+xml;q=0.8, */*;q=0.1")
 
 	resp, err := client.Do(req)

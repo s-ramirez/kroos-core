@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"yak-go/internal/types"
+	"github.com/s-ramirez/kroos-core/internal/types"
 )
 
 // fakeChannel is a test double that lets tests drive inbound messages
@@ -401,5 +401,46 @@ func TestDispatcherHandlerErrorEmittedAsReply(t *testing.T) {
 	}
 	if sent[0].Content != "error: boom\n" {
 		t.Fatalf("unexpected error content: %q", sent[0].Content)
+	}
+}
+
+func TestDispatcherPassesAttachmentsAndReplyTo(t *testing.T) {
+	att := Attachment{Path: "/tmp/x.png", MimeType: "image/png", Name: "x.png"}
+	ch := newFakeChannel("discord",
+		Inbound{Channel: "discord", Thread: "c1", Content: "look", MessageID: "m9", Attachments: []Attachment{att}, Kind: KindUser},
+	)
+	reg := NewRegistry()
+	reg.Register(ch)
+
+	var gotAtts []Attachment
+	conv := (*Conversation)(nil)
+	d := &Dispatcher{
+		Channels: reg,
+		Store:    NewStore(),
+		Handler: handlerFunc(func(ctx context.Context, c *Conversation, content string, reply ReplyFunc) error {
+			gotAtts, conv = c.Attachments, c
+			return reply("ok")
+		}),
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	done := make(chan struct{})
+	go func() { _ = d.Run(ctx); close(done) }()
+	select {
+	case <-ch.ready:
+	case <-ctx.Done():
+		t.Fatal("timeout")
+	}
+	cancel()
+	<-done
+
+	if len(gotAtts) != 1 || gotAtts[0] != att {
+		t.Errorf("attachments = %+v", gotAtts)
+	}
+	if conv.Attachments != nil {
+		t.Error("attachments should be cleared after the turn")
+	}
+	if sent := ch.sends(); len(sent) != 1 || sent[0].ReplyTo != "m9" {
+		t.Errorf("sent = %+v", sent)
 	}
 }

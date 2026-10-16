@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"yak-go/internal/skills"
-	"yak-go/internal/tools"
+	"github.com/s-ramirez/kroos-core/internal/skills"
+	"github.com/s-ramirez/kroos-core/internal/tools"
 )
 
 type Environment struct {
@@ -123,7 +123,7 @@ func buildCuratedMemorySection(curated string, available []tools.Tool) string {
 	lines := []string{"# Memory"}
 	if hasMemoryTools {
 		lines = append(lines,
-			"You have a persistent memory store at .yak/memory/ with three layers:",
+			"You have a persistent memory store at .kroos/memory/ with three layers:",
 			"- MEMORY.md — curated long-term facts (shown below). Only the /memory:distill flow should rewrite it.",
 			"- sessions/YYYY-MM-DD-HHMM.md — durable session notes. Use `memory` with action=write to save anything worth remembering from this session.",
 			"- vault/{Memory,Knowledge,Journal,Notes}/*.md — permanent reference notes. Use `memory` with action=read/search/list to recall.",

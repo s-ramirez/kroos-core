@@ -1,9 +1,9 @@
 # Go build artifacts
-/yak-go
+/github.com/s-ramirez/kroos-core
 *.exe
 *.test
 *.out
-.yak
+.kroos
 .env
 
 # Claude Code (machine-local)

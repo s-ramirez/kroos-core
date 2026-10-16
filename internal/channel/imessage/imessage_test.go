@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"yak-go/internal/channel"
+	"github.com/s-ramirez/kroos-core/internal/channel"
 )
 
 func TestNormalizeHandle(t *testing.T) {
@@ -142,7 +142,7 @@ func TestWebhookHandler_GroupRequiresTag(t *testing.T) {
 		ServerURL:     "http://localhost",
 		Password:      "secret",
 		OwnerHandles:  []string{"+15551234567"},
-		GroupTag:      "@yak",
+		GroupTag:      "@kroos",
 		DebounceDelay: 50 * time.Millisecond,
 	})
 	out := make(chan channel.Inbound, 4)
@@ -160,7 +160,7 @@ func TestWebhookHandler_GroupRequiresTag(t *testing.T) {
 	}
 
 	// Group message with tag — should be forwarded, tag stripped.
-	body = makeNewMessagePayload("+15551234567", "@yak what time is it?", "iMessage;+;groupchat123", false)
+	body = makeNewMessagePayload("+15551234567", "@kroos what time is it?", "iMessage;+;groupchat123", false)
 	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.URL.RawQuery = "password=secret"
 	rr = httptest.NewRecorder()
@@ -168,7 +168,7 @@ func TestWebhookHandler_GroupRequiresTag(t *testing.T) {
 
 	select {
 	case msg := <-out:
-		if strings.Contains(msg.Content, "@yak") {
+		if strings.Contains(msg.Content, "@kroos") {
 			t.Errorf("tag should be stripped from content, got %q", msg.Content)
 		}
 		if !strings.Contains(msg.Content, "what time is it?") {
@@ -184,7 +184,7 @@ func TestWebhookHandler_GroupParticipantsForwarded(t *testing.T) {
 		ServerURL:     "http://localhost",
 		Password:      "secret",
 		OwnerHandles:  []string{"+15551234567"},
-		GroupTag:      "@yak",
+		GroupTag:      "@kroos",
 		DebounceDelay: 50 * time.Millisecond,
 	})
 	out := make(chan channel.Inbound, 4)
@@ -192,7 +192,7 @@ func TestWebhookHandler_GroupParticipantsForwarded(t *testing.T) {
 
 	body := makeGroupMessagePayload(
 		"+15551234567",
-		"@yak say hi to everyone",
+		"@kroos say hi to everyone",
 		"iMessage;+;groupchat123",
 		[]string{"+15551234567", "+15559999999", "alice@example.com"},
 	)
@@ -230,6 +230,67 @@ func TestWebhookHandler_GroupParticipantsForwarded(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for group message")
+	}
+}
+
+func TestWebhookHandler_OpenChatAcceptsNonOwnersWithTag(t *testing.T) {
+	ch := New(Config{
+		ServerURL:     "http://localhost",
+		Password:      "secret",
+		OwnerHandles:  []string{"+15551234567"},
+		GroupTag:      "@kroos",
+		OpenChats:     []string{"iMessage;+;open1"},
+		DebounceDelay: 50 * time.Millisecond,
+	})
+	out := make(chan channel.Inbound, 4)
+	handler := ch.makeHandler(context.Background(), out)
+	post := func(handle, text, chat string) {
+		body := makeNewMessagePayload(handle, text, chat, false)
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+		req.URL.RawQuery = "password=secret"
+		handler(httptest.NewRecorder(), req)
+	}
+
+	post("+15550000000", "@kroos hi", "iMessage;+;closed")       // closed group: drop
+	post("+15550000000", "hi", "iMessage;+;open1")               // no tag: drop
+	post("+15550000000", "@kroos hi", "iMessage;-;+15550000000") // DM: drop
+	post("+15550000000", "@kroos what's up", "iMessage;+;open1")
+
+	select {
+	case msg := <-out:
+		if msg.Thread != "iMessage;+;open1" {
+			t.Fatalf("thread = %q", msg.Thread)
+		}
+		if !strings.Contains(msg.Content, "[+15550000000]: what's up") {
+			t.Errorf("content should carry sender prefix, got %q", msg.Content)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for open-chat message")
+	}
+	select {
+	case msg := <-out:
+		t.Fatalf("unexpected extra message: %+v", msg)
+	case <-time.After(150 * time.Millisecond):
+	}
+}
+
+func TestWebhookHandler_OpenChatRequiresGroupTagConfigured(t *testing.T) {
+	ch := New(Config{
+		ServerURL:     "http://localhost",
+		Password:      "secret",
+		OpenChats:     []string{"iMessage;+;open1"},
+		DebounceDelay: 50 * time.Millisecond,
+	})
+	out := make(chan channel.Inbound, 4)
+	handler := ch.makeHandler(context.Background(), out)
+	body := makeNewMessagePayload("+15550000000", "hi", "iMessage;+;open1", false)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.URL.RawQuery = "password=secret"
+	handler(httptest.NewRecorder(), req)
+	select {
+	case msg := <-out:
+		t.Fatalf("expected drop without GroupTag, got %+v", msg)
+	case <-time.After(150 * time.Millisecond):
 	}
 }
 
@@ -276,19 +337,13 @@ func TestWebhookHandler_NonPostIgnored(t *testing.T) {
 	}
 }
 
-// makeNewMessagePayload builds a minimal imessage-rs webhook JSON body.
-// isGroup uses style=43 (imessage-rs group detection) when true.
+// makeNewMessagePayload builds a minimal BlueBubbles webhook JSON body.
 func makeNewMessagePayload(handle, text, chatGUID string, fromMe bool) []byte {
-	style := 0
-	if strings.Contains(chatGUID, ";+;") {
-		style = 43
-	}
 	type handleObj struct {
 		Address string `json:"address"`
 	}
 	type chatObj struct {
-		Guid  string `json:"guid"` // imessage-rs field name
-		Style int    `json:"style"`
+		Guid string `json:"guid"`
 	}
 	type data struct {
 		Text     string    `json:"text"`
@@ -305,7 +360,7 @@ func makeNewMessagePayload(handle, text, chatGUID string, fromMe bool) []byte {
 		Data: data{
 			Text:     text,
 			IsFromMe: fromMe,
-			Chats:    []chatObj{{Guid: chatGUID, Style: style}},
+			Chats:    []chatObj{{Guid: chatGUID}},
 			Handle:   handleObj{Address: handle},
 		},
 	}
@@ -323,7 +378,6 @@ func makeGroupMessagePayload(handle, text, chatGUID string, participants []strin
 	}
 	type chatObj struct {
 		Guid         string    `json:"guid"`
-		Style        int       `json:"style"`
 		Participants []partObj `json:"participants"`
 	}
 	type data struct {
@@ -344,7 +398,7 @@ func makeGroupMessagePayload(handle, text, chatGUID string, participants []strin
 		Type: "new-message",
 		Data: data{
 			Text:   text,
-			Chats:  []chatObj{{Guid: chatGUID, Style: 43, Participants: parts}},
+			Chats:  []chatObj{{Guid: chatGUID, Participants: parts}},
 			Handle: handleObj{Address: handle},
 		},
 	}

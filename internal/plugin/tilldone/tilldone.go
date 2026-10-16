@@ -3,8 +3,8 @@ package tilldone
 import (
 	"sync"
 
-	"yak-go/internal/plugin"
-	"yak-go/internal/tools"
+	"github.com/s-ramirez/kroos-core/internal/plugin"
+	"github.com/s-ramirez/kroos-core/internal/tools"
 )
 
 // TillDone enforces task discipline: the agent must define tasks and mark

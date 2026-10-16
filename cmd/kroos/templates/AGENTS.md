@@ -8,13 +8,13 @@ tools: ["*"]
 
 # Repository Guidelines
 
-- Repo: https://github.com/s-ramirez/yak-go
+- Repo: https://github.com/s-ramirez/github.com/s-ramirez/kroos-core
 - In chat replies, file references must be repo-root relative only (example: `internal/channel/discord/channel.go:80`); never absolute paths or `~/...`.
 - Companion bootstrap files: `IDENTITY.md` captures the agent's persona and working style, `USER.md` captures stable collaborator preferences. Keep them aligned with this file when conventions evolve.
 
 ## Project Structure & Module Organization
 
-- CLI entrypoint: `cmd/yak/` (`main.go` wires dependencies; `init.go` bootstraps a `.yak` workspace; embedded templates under `cmd/yak/templates/`).
+- CLI entrypoint: `cmd/kroos/` (`main.go` wires dependencies; `init.go` bootstraps a `.kroos` workspace; embedded templates under `cmd/kroos/templates/`).
 - Internal packages under `internal/`:
   - `cli/` — interactive runner and agent loop (`runner.go:Runner.agentLoop`).
   - `llm/` — OpenAI-compatible chat completions client.
@@ -25,29 +25,29 @@ tools: ["*"]
   - `subagents/` — multi-provider sub-agent definitions.
   - `memory/` — persistent memory store.
   - `compaction/`, `schedule/`, `plugin/`, `types/` — supporting packages.
-- Workspace state: `.yak/` (project) and `~/.yak/` (user) hold `AGENTS.md`, `IDENTITY.md`, `USER.md`, `memory/`, `skills/`, `subagents/`.
+- Workspace state: `.kroos/` (project) and `~/.kroos/` (user) hold `AGENTS.md`, `IDENTITY.md`, `USER.md`, `memory/`, `skills/`, `subagents/`.
 - Reference docs and templates live under `docs/reference/`.
 
 ## Build, Test, and Development Commands
 
 - Runtime baseline: Go **1.26.1+**.
 - Build: `go build ./...`
-- Run CLI: `go run ./cmd/yak` (defaults to the OpenAI API).
+- Run CLI: `go run ./cmd/kroos` (defaults to the OpenAI API).
 - Full test suite: `go test ./...`
 - Single package: `go test ./internal/tools/`
 - Single test: `go test ./internal/tools/ -run TestGrepToolFindsPattern`
 - Verbose: `go test -v ./...`
-- Bootstrap a workspace: `yak init` (writes `.yak/AGENTS.md`, `.yak/IDENTITY.md`, `.yak/USER.md`, `.yak/memory/MEMORY.md`, prompts for `.env` keys).
+- Bootstrap a workspace: `kroos init` (writes `.kroos/AGENTS.md`, `.kroos/IDENTITY.md`, `.kroos/USER.md`, `.kroos/memory/MEMORY.md`, prompts for `.env` keys).
 - Preferred landing bar before pushing `main`: `go build ./...` and `go test ./...` green.
 - For narrowly scoped changes, prefer a narrowly scoped test that directly validates the touched behavior. If no meaningful scoped test exists, say so explicitly.
 - Do not use scoped tests as permission to ignore plausibly related failures.
 
 ## Environment Variables
 
-- Core: `YAK_BASE_URL` (default `https://api.openai.com`), `YAK_MODEL` (default `gpt-5.4`), `YAK_API_KEY` (optional bearer), `YAK_LLM_TIMEOUT` (default `5m`), `YAK_SUBAGENT_LLM_TIMEOUT` (default: same as `YAK_LLM_TIMEOUT`), `YAK_WEBUI_PORT`, `YAK_LOG_DIR`, `YAK_HEARTBEAT_INTERVAL`.
-- iMessage (BlueBubbles): `YAK_IMESSAGE_ENABLED`, `YAK_IMESSAGE_SERVER_URL`, `YAK_IMESSAGE_PASSWORD`, `YAK_IMESSAGE_WEBHOOK_PORT`, `YAK_IMESSAGE_WEBHOOK_PATH`, `YAK_IMESSAGE_OWNER_HANDLES`, `YAK_IMESSAGE_GROUP_TAG`.
-- Discord: `YAK_DISCORD_ENABLED`, `YAK_DISCORD_TOKEN`, `YAK_DISCORD_OWNER_IDS`, `YAK_DISCORD_GUILD_TAG`.
-- Web search: `YAK_BRAVE_API_KEY` or `BRAVE_API_KEY`.
+- Core: `KROOS_BASE_URL` (default `https://api.openai.com`), `KROOS_MODEL` (default `gpt-5.4`), `KROOS_API_KEY` (optional bearer), `KROOS_LLM_TIMEOUT` (default `5m`), `KROOS_SUBAGENT_LLM_TIMEOUT` (default: same as `KROOS_LLM_TIMEOUT`), `KROOS_WEBUI_PORT`, `KROOS_LOG_DIR`, `KROOS_HEARTBEAT_INTERVAL`.
+- iMessage (BlueBubbles): `KROOS_IMESSAGE_ENABLED`, `KROOS_IMESSAGE_SERVER_URL`, `KROOS_IMESSAGE_PASSWORD`, `KROOS_IMESSAGE_WEBHOOK_PORT`, `KROOS_IMESSAGE_WEBHOOK_PATH`, `KROOS_IMESSAGE_OWNER_HANDLES`, `KROOS_IMESSAGE_GROUP_TAG`.
+- Discord: `KROOS_DISCORD_ENABLED`, `KROOS_DISCORD_TOKEN`, `KROOS_DISCORD_OWNER_IDS`, `KROOS_DISCORD_GUILD_TAG`.
+- Web search: `KROOS_BRAVE_API_KEY` or `BRAVE_API_KEY`.
 
 ## Architecture Notes
 
@@ -55,7 +55,7 @@ tools: ["*"]
 - **Tool interface** (`internal/tools/types.go`): `Tool.Definition()` returns metadata + JSON schema; `Tool.Execute(ctx, json.RawMessage)` returns `(ToolResult, error)`. Tool-level errors (bad args, file not found) are returned as `ToolResult{IsError: true}` via `errorResult`/`errorResultf` helpers, not as Go errors.
 - **Tool hooks** (`internal/tools/types.go`): `BeforeToolCall` can block execution by returning a reason string; `AfterToolCall` observes results. Hooks register on the `Registry`.
 - **Filesystem abstraction** (`internal/tools/fs.go`): Tools that touch files take an `FS` interface. Production uses `OSFS{}`. Directory-walking tools (`grep`, `find`, `bash`) use `os` directly.
-- **Skills** (`internal/skills/`): `SKILL.md` files with YAML frontmatter (`name`, `description`, `disable-model-invocation`). Discovered from `~/.yak/skills/` and `.yak/skills/`. First name wins on collision. Invoke with `/skill:<name> [args]`.
+- **Skills** (`internal/skills/`): `SKILL.md` files with YAML frontmatter (`name`, `description`, `disable-model-invocation`). Discovered from `~/.kroos/skills/` and `.kroos/skills/`. First name wins on collision. Invoke with `/skill:<name> [args]`.
 - **System prompt** (`internal/prompt/system.go`): `BuildSystemPrompt(tools, skills, env, ...)` assembles environment info, per-tool guidelines, tool-selection rules, `<available_skills>` block, and injects context files (`IDENTITY.md`, `USER.md`) at the top.
 - **Channels** (`internal/channel/`): `Channel` has `Name()`, `Listen(ctx, out chan<- Inbound)`, and `Send(ctx, Outbound)`. The `Dispatcher` fans out to all channels and routes conversations by `(Channel, Thread)`. When refactoring shared channel logic (routing, allowlists, filtering), always consider **all** channels.
 
@@ -91,8 +91,8 @@ tools: ["*"]
 
 - Never commit real API keys, phone numbers, tokens, or live configuration values. Use obviously fake placeholders in docs, tests, and examples.
 - `.env` is loaded automatically but must never be committed.
-- Web search credentials live in `YAK_BRAVE_API_KEY` / `BRAVE_API_KEY`.
-- Channel credentials (`YAK_IMESSAGE_PASSWORD`, `YAK_DISCORD_TOKEN`) stay in `.env`; do not echo them in logs or replies.
+- Web search credentials live in `KROOS_BRAVE_API_KEY` / `BRAVE_API_KEY`.
+- Channel credentials (`KROOS_IMESSAGE_PASSWORD`, `KROOS_DISCORD_TOKEN`) stay in `.env`; do not echo them in logs or replies.
 
 ## Collaboration / Safety Notes
 
@@ -105,8 +105,8 @@ tools: ["*"]
 
 ## Core Preservation Policy
 
-- Treat `cmd/yak/` and `internal/` as the product core. Avoid changing them unless the user explicitly asks for a core change or there is no credible extension-point alternative.
-- Prefer solving new behavior in `.yak/` first: skills, memory, subagents, docs, scripts, generated assets, small helper apps, and other workspace-local artifacts are fair game.
-- Before proposing a core edit, first check whether a skill, prompt/context update, plugin, wrapper script, config/env change, or `.yak/` artifact can achieve the goal with less churn.
+- Treat `cmd/kroos/` and `internal/` as the product core. Avoid changing them unless the user explicitly asks for a core change or there is no credible extension-point alternative.
+- Prefer solving new behavior in `.kroos/` first: skills, memory, subagents, docs, scripts, generated assets, small helper apps, and other workspace-local artifacts are fair game.
+- Before proposing a core edit, first check whether a skill, prompt/context update, plugin, wrapper script, config/env change, or `.kroos/` artifact can achieve the goal with less churn.
 - If a core edit is truly necessary, say why the extension-point path is insufficient before making the change.
 - Uncommitted changes in core files are not yours to tidy up or build on casually. Treat them as high-risk and avoid touching them unless explicitly required.

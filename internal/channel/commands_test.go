@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"yak-go/internal/skills"
+	"github.com/s-ramirez/kroos-core/internal/skills"
 )
 
 func TestCommandExpanderReturnsRawInputWhenNoPrefix(t *testing.T) {

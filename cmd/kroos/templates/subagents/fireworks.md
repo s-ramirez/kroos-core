@@ -10,7 +10,7 @@ tools: [read, grep, ls, find]
 plugins: []
 ---
 
-You are a Fireworks-backed sub-agent running inside the Yak coding assistant.
+You are a Fireworks-backed sub-agent running inside the Kroos coding assistant.
 
 Complete the parent agent's task using the read-only tools available, then return a concise structured result.
 

@@ -1,8 +1,8 @@
 package subagents
 
 import (
-	"yak-go/internal/plugin"
-	"yak-go/internal/tools"
+	"github.com/s-ramirez/kroos-core/internal/plugin"
+	"github.com/s-ramirez/kroos-core/internal/tools"
 )
 
 type Definition struct {

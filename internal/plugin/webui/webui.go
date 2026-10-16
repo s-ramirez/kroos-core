@@ -3,9 +3,9 @@ package webui
 import (
 	"net/http"
 
-	"yak-go/internal/plugin"
-	"yak-go/internal/tools"
-	"yak-go/internal/types"
+	"github.com/s-ramirez/kroos-core/internal/plugin"
+	"github.com/s-ramirez/kroos-core/internal/tools"
+	"github.com/s-ramirez/kroos-core/internal/types"
 )
 
 type WebUI struct {
@@ -67,4 +67,3 @@ func (w *WebUI) OnUsage(ctx plugin.AgentLifecycleContext, usage *types.Usage, co
 		ContextSize:  contextSize,
 	})
 }
-

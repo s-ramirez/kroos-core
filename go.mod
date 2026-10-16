@@ -1,4 +1,4 @@
-module yak-go
+module github.com/s-ramirez/kroos-core
 
 go 1.26.1
 

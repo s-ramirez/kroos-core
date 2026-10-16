@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"yak-go/internal/types"
+	"github.com/s-ramirez/kroos-core/internal/types"
 )
 
 type JSONSchema map[string]any

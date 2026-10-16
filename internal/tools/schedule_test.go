@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"yak-go/internal/schedule"
+	"github.com/s-ramirez/kroos-core/internal/schedule"
 )
 
 func newScheduleTool(t *testing.T) (*ScheduleTool, *schedule.Store) {

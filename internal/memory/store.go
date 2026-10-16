@@ -20,7 +20,7 @@ const (
 // matching the article's Obsidian layout.
 var VaultSubdirs = []string{"Memory", "Knowledge", "Journal", "Notes"}
 
-// Store owns a .yak/memory directory. All operations are sandboxed to base.
+// Store owns a .kroos/memory directory. All operations are sandboxed to base.
 // The layout is created lazily on first write.
 type Store struct {
 	base    string

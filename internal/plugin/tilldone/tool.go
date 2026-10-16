@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"yak-go/internal/tools"
+	"github.com/s-ramirez/kroos-core/internal/tools"
 )
 
 type taskStatus string
@@ -66,8 +66,8 @@ var tilldoneDefinition = tools.ToolDefinition{
 		"type": "object",
 		"properties": map[string]any{
 			"action": map[string]any{
-				"type": "string",
-				"enum": []string{"new-list", "add", "toggle", "remove", "update", "list", "clear"},
+				"type":        "string",
+				"enum":        []string{"new-list", "add", "toggle", "remove", "update", "list", "clear"},
 				"description": "The action to perform",
 			},
 			"text": map[string]any{

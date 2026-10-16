@@ -38,7 +38,7 @@ const (
 
 var skillWriteDefinition = ToolDefinition{
 	Name: "skill_write",
-	Description: "Author or replace a project-level skill at .yak/skills/<name>/SKILL.md. " +
+	Description: "Author or replace a project-level skill at .kroos/skills/<name>/SKILL.md. " +
 		"Use this to teach yourself a recurring routine (e.g. \"log my meals daily\") that should persist across sessions. " +
 		"After writing, the skills registry is reloaded so /skill:<name> works immediately.",
 	Guidelines: []string{

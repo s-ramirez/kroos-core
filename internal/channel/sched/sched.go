@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"yak-go/internal/channel"
-	"yak-go/internal/heartbeat"
-	"yak-go/internal/schedule"
+	"github.com/s-ramirez/kroos-core/internal/channel"
+	"github.com/s-ramirez/kroos-core/internal/heartbeat"
+	"github.com/s-ramirez/kroos-core/internal/schedule"
 )
 
 // Name is the channel name used for self-identification in the registry.

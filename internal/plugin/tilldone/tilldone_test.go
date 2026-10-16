@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"yak-go/internal/plugin"
-	"yak-go/internal/tools"
+	"github.com/s-ramirez/kroos-core/internal/plugin"
+	"github.com/s-ramirez/kroos-core/internal/tools"
 )
 
 func setup() *TillDone {

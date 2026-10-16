@@ -3,7 +3,7 @@ package compaction
 import (
 	"testing"
 
-	"yak-go/internal/types"
+	"github.com/s-ramirez/kroos-core/internal/types"
 )
 
 func TestEstimateTokensString(t *testing.T) {

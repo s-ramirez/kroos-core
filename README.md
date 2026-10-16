@@ -1,4 +1,4 @@
-# yak-go
+# github.com/s-ramirez/kroos-core
 
 ## Features
 
@@ -8,7 +8,7 @@
 - Dynamic system prompt with environment info and tool-selection rules
 - Built-in tools: `read`, `write`, `edit`, `bash`, `grep`, `ls`, `find`, `web_fetch`, `web_search`
 - Plugin system with startup-registered plugins; `tilldone` is currently disabled
-- Multi-provider sub-agents and customizable main agent via `.yak/agent.md`
+- Multi-provider sub-agents and customizable main agent via `.kroos/agent.md`
 
 ## Prerequisites
 
@@ -18,7 +18,7 @@
 ## Running
 
 ```sh
-go run ./cmd/yak
+go run ./cmd/kroos
 ```
 
 By default the CLI connects to OpenAI using `gpt-5.4`. Configure with
@@ -26,42 +26,42 @@ environment variables. The CLI also loads a local `.env` file automatically,
 which is useful for development defaults:
 
 ```env
-YAK_WEBUI_PORT=8420
-YAK_LOG_DIR=.yak/logs
+KROOS_WEBUI_PORT=8420
+KROOS_LOG_DIR=.kroos/logs
 ```
 
 Available settings:
 
 | Variable            | Default                     | Description                                           |
 |---------------------|-----------------------------|-------------------------------------------------------|
-| `YAK_BASE_URL`      | `https://api.openai.com`    | Base URL of the chat completions API                  |
-| `YAK_MODEL`         | `gpt-5.4`                   | Model name to use in API requests                     |
-| `YAK_API_KEY`       | unset                       | Optional bearer token for authenticated APIs          |
-| `YAK_LLM_TIMEOUT`   | `5m`                        | Timeout for primary and heartbeat LLM requests        |
-| `YAK_SUBAGENT_LLM_TIMEOUT` | `YAK_LLM_TIMEOUT` | Timeout for sub-agent LLM requests                    |
-| `YAK_WEBUI_PORT`    | `8420`                      | Enables the web UI plugin on the given port           |
-| `YAK_LOG_DIR`       | unset                       | Writes session logs under a timestamped subdirectory  |
-| `YAK_BRAVE_API_KEY` | unset                       | Brave Search API key for the `web_search` tool        |
+| `KROOS_BASE_URL`      | `https://api.openai.com`    | Base URL of the chat completions API                  |
+| `KROOS_MODEL`         | `gpt-5.4`                   | Model name to use in API requests                     |
+| `KROOS_API_KEY`       | unset                       | Optional bearer token for authenticated APIs          |
+| `KROOS_LLM_TIMEOUT`   | `5m`                        | Timeout for primary and heartbeat LLM requests        |
+| `KROOS_SUBAGENT_LLM_TIMEOUT` | `KROOS_LLM_TIMEOUT` | Timeout for sub-agent LLM requests                    |
+| `KROOS_WEBUI_PORT`    | `8420`                      | Enables the web UI plugin on the given port           |
+| `KROOS_LOG_DIR`       | unset                       | Writes session logs under a timestamped subdirectory  |
+| `KROOS_BRAVE_API_KEY` | unset                       | Brave Search API key for the `web_search` tool        |
 | `BRAVE_API_KEY`     | unset                       | Alternate Brave Search API key env var                |
 
 Example with a custom endpoint:
 
 ```sh
-YAK_BASE_URL=http://localhost:8080 YAK_MODEL=my-model go run ./cmd/yak
+KROOS_BASE_URL=http://localhost:8080 KROOS_MODEL=my-model go run ./cmd/kroos
 ```
 
 Example with OpenAI:
 
 ```sh
-YAK_BASE_URL=https://api.openai.com \
-YAK_MODEL=gpt-4o-mini \
-YAK_API_KEY=your-openai-api-key \
-go run ./cmd/yak
+KROOS_BASE_URL=https://api.openai.com \
+KROOS_MODEL=gpt-4o-mini \
+KROOS_API_KEY=your-openai-api-key \
+go run ./cmd/kroos
 ```
 
 ## Multi-provider sub-agents
 
-Each sub-agent under `.yak/subagents/` or `~/.yak/subagents/` can target its
+Each sub-agent under `.kroos/subagents/` or `~/.kroos/subagents/` can target its
 own provider via three frontmatter fields:
 
 | Field         | Description                                                              |
@@ -70,12 +70,12 @@ own provider via three frontmatter fields:
 | `base_url`    | API base URL (the client appends `/v1/chat/completions`)                 |
 | `api_key_env` | Name of an env var holding the API key (resolved at spawn time)          |
 
-If `base_url` is omitted, the global `YAK_BASE_URL` is used. If `api_key_env`
+If `base_url` is omitted, the global `KROOS_BASE_URL` is used. If `api_key_env`
 is set but the env var is empty, no `Authorization` header is sent. Put
 secrets in `.env` and reference them by env var name —
 never commit keys.
 
-Example sub-agents shipped in `.yak/subagents/`: `gpt.md` (OpenAI),
+Example sub-agents shipped in `.kroos/subagents/`: `gpt.md` (OpenAI),
 `fireworks.md` (Fireworks), `local.md` (OMLX).
 
 `.env`:
@@ -87,7 +87,7 @@ FIREWORKS_API_KEY=fw-...
 
 ## Customizing the main agent
 
-Drop a `.yak/agent.md` (project) or `~/.yak/agent.md` (user) to customize the
+Drop a `.kroos/agent.md` (project) or `~/.kroos/agent.md` (user) to customize the
 orchestrator. Same frontmatter as sub-agents, plus the body becomes a
 `# Personality` section appended to the auto-built system prompt.
 
@@ -138,7 +138,7 @@ go test -v ./...
 ## Project structure
 
 ```
-cmd/yak/             CLI entrypoint
+cmd/kroos/             CLI entrypoint
 internal/
   cli/               Interactive runner and agent loop
   llm/               Chat completions client

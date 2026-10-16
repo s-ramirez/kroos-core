@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"yak-go/internal/tools"
+	"github.com/s-ramirez/kroos-core/internal/tools"
 )
 
 type spawnTool struct {
@@ -35,7 +35,7 @@ type controlParams struct {
 
 var subagentsDefinition = tools.ToolDefinition{
 	Name:        "subagents",
-	Description: "Inspect, wait on, or cancel Yak subagent runs.",
+	Description: "Inspect, wait on, or cancel Kroos subagent runs.",
 	Guidelines: []string{
 		"Use subagents action=list to inspect active and completed child runs.",
 		"Use subagents action=wait with a run_id after starting a background subagent.",
@@ -294,7 +294,7 @@ func buildSessionsSpawnDefinition(defs []Definition) tools.ToolDefinition {
 
 	return tools.ToolDefinition{
 		Name:        "sessions_spawn",
-		Description: "Start a named Yak subagent on a delegated task. The subagent always starts with fresh context. By default the tool waits for the child to finish and returns its result.",
+		Description: "Start a named Kroos subagent on a delegated task. The subagent always starts with fresh context. By default the tool waits for the child to finish and returns its result.",
 		Guidelines:  guidelines,
 		Parameters: tools.JSONSchema{
 			"type": "object",

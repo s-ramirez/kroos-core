@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"yak-go/internal/channel"
-	"yak-go/internal/plugin"
-	"yak-go/internal/schedule"
-	"yak-go/internal/tools"
-	"yak-go/internal/types"
+	"github.com/s-ramirez/kroos-core/internal/channel"
+	"github.com/s-ramirez/kroos-core/internal/plugin"
+	"github.com/s-ramirez/kroos-core/internal/schedule"
+	"github.com/s-ramirez/kroos-core/internal/tools"
+	"github.com/s-ramirez/kroos-core/internal/types"
 )
 
 type stubTool struct {
@@ -543,7 +543,7 @@ func TestRunnerRecoversFromEmptyAfterBlockedToolCall(t *testing.T) {
 	}
 
 	registry := tools.NewRegistry(
-		stubTool{name: "find", output: "cmd/yak/main.go"},
+		stubTool{name: "find", output: "cmd/kroos/main.go"},
 		stubTool{name: "tilldone", output: "ok"},
 	)
 	registry.AddHook(&blockingHook{blockedTool: "find", reason: "No tasks defined."})
@@ -640,7 +640,7 @@ func TestRunnerSkipsRecoveryRetryAfterSuccessfulToolResult(t *testing.T) {
 				Choices: []types.Choice{{
 					Message: types.ResponseMessage{
 						Role:    "assistant",
-						Content: strPtr("Final answer based on tool output:\ncmd/yak/main.go\ninternal/cli/runner.go"),
+						Content: strPtr("Final answer based on tool output:\ncmd/kroos/main.go\ninternal/cli/runner.go"),
 					},
 				}},
 			},
@@ -648,7 +648,7 @@ func TestRunnerSkipsRecoveryRetryAfterSuccessfulToolResult(t *testing.T) {
 	}
 
 	registry := tools.NewRegistry(
-		stubTool{name: "find", output: "cmd/yak/main.go\ninternal/cli/runner.go"},
+		stubTool{name: "find", output: "cmd/kroos/main.go\ninternal/cli/runner.go"},
 	)
 
 	runner := Runner{
@@ -669,7 +669,7 @@ func TestRunnerSkipsRecoveryRetryAfterSuccessfulToolResult(t *testing.T) {
 	if !strings.Contains(text, "Final answer based on tool output") {
 		t.Fatalf("expected recovered final answer, got %q", text)
 	}
-	if !strings.Contains(text, "cmd/yak/main.go") {
+	if !strings.Contains(text, "cmd/kroos/main.go") {
 		t.Fatalf("expected tool output in fallback text, got %q", text)
 	}
 	foundRecoveryPrompt := false

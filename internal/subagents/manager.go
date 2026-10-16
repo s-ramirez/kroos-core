@@ -11,11 +11,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"yak-go/internal/cli"
-	"yak-go/internal/llm"
-	"yak-go/internal/plugin"
-	"yak-go/internal/tools"
-	"yak-go/internal/types"
+	"github.com/s-ramirez/kroos-core/internal/cli"
+	"github.com/s-ramirez/kroos-core/internal/llm"
+	"github.com/s-ramirez/kroos-core/internal/plugin"
+	"github.com/s-ramirez/kroos-core/internal/tools"
+	"github.com/s-ramirez/kroos-core/internal/types"
 )
 
 type ClientFactory func(def Definition) (llm.ChatClient, error)
@@ -484,7 +484,7 @@ func (m *Manager) wait(ctx context.Context, runID string) (RunSnapshot, error) {
 
 func buildDelegationMessage(def Definition, req SpawnRequest) string {
 	lines := []string{
-		fmt.Sprintf("You are running as the %q sub-agent for the main Yak agent.", def.Name),
+		fmt.Sprintf("You are running as the %q sub-agent for the main Kroos agent.", def.Name),
 		"Return a concise result for the parent agent, not end-user-oriented prose.",
 	}
 	if strings.TrimSpace(req.Label) != "" {

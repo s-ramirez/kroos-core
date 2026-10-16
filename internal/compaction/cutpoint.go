@@ -1,6 +1,6 @@
 package compaction
 
-import "yak-go/internal/types"
+import "github.com/s-ramirez/kroos-core/internal/types"
 
 // FindCutPoint returns the index of the first message to KEEP after
 // compaction. Everything in [startIndex, cut) is fed to the summarizer;

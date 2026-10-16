@@ -23,7 +23,7 @@ var tplUser string
 //go:embed templates/MEMORY.md
 var tplMemory string
 
-// runInit bootstraps a `.yak` workspace in the current directory: copies
+// runInit bootstraps a `.kroos` workspace in the current directory: copies
 // workspace templates (skipping existing files with a warning) and walks the
 // user through per-channel env var prompts, appending any new keys to .env.
 // Keys already present in .env are never re-prompted or overwritten.
@@ -34,21 +34,21 @@ func runInit(args []string) error {
 	}
 
 	out := os.Stdout
-	fmt.Fprintf(out, "Bootstrapping yak workspace in %s\n\n", cwd)
+	fmt.Fprintf(out, "Bootstrapping kroos workspace in %s\n\n", cwd)
 
-	yakDir := filepath.Join(cwd, ".yak")
-	if err := os.MkdirAll(yakDir, 0o755); err != nil {
-		return fmt.Errorf("create .yak: %w", err)
+	kroosDir := filepath.Join(cwd, ".kroos")
+	if err := os.MkdirAll(kroosDir, 0o755); err != nil {
+		return fmt.Errorf("create .kroos: %w", err)
 	}
-	memoryDir := filepath.Join(yakDir, "memory")
+	memoryDir := filepath.Join(kroosDir, "memory")
 	if err := os.MkdirAll(memoryDir, 0o755); err != nil {
-		return fmt.Errorf("create .yak/memory: %w", err)
+		return fmt.Errorf("create .kroos/memory: %w", err)
 	}
 
 	fmt.Fprintln(out, "Templates:")
-	writeTemplateFile(out, filepath.Join(yakDir, "AGENTS.md"), tplAgents)
-	writeTemplateFile(out, filepath.Join(yakDir, "IDENTITY.md"), tplIdentity)
-	writeTemplateFile(out, filepath.Join(yakDir, "USER.md"), tplUser)
+	writeTemplateFile(out, filepath.Join(kroosDir, "AGENTS.md"), tplAgents)
+	writeTemplateFile(out, filepath.Join(kroosDir, "IDENTITY.md"), tplIdentity)
+	writeTemplateFile(out, filepath.Join(kroosDir, "USER.md"), tplUser)
 	writeTemplateFile(out, filepath.Join(memoryDir, "MEMORY.md"), tplMemory)
 
 	existing, err := readEnvKeys(".env")
@@ -78,51 +78,51 @@ func runInit(args []string) error {
 
 	fmt.Fprintln(out, "\n== Web UI ==")
 	if promptYesNo(reader, out, "Enable embedded web UI?", false) {
-		ask("YAK_WEBUI_PORT", "Port", "8420")
+		ask("KROOS_WEBUI_PORT", "Port", "8420")
 	}
 
 	fmt.Fprintln(out, "\n== Session logging ==")
 	if promptYesNo(reader, out, "Enable per-session logging?", true) {
-		ask("YAK_LOG_DIR", "Log directory", ".yak/logs")
+		ask("KROOS_LOG_DIR", "Log directory", ".kroos/logs")
 	}
 
 	fmt.Fprintln(out, "\n== Heartbeat ==")
 	fmt.Fprintln(out, "Periodic tick that wakes the agent on a fixed interval.")
 	fmt.Fprintln(out, "The agent can respond with HEARTBEAT_OK to suppress output and keep context clean.")
 	if promptYesNo(reader, out, "Enable heartbeat?", false) {
-		ask("YAK_HEARTBEAT_INTERVAL", "Interval (e.g. 10m, 1h)", "15m")
-		ask("YAK_HEARTBEAT_MODEL", "Model override for heartbeat turns (blank = same as default)", "")
+		ask("KROOS_HEARTBEAT_INTERVAL", "Interval (e.g. 10m, 1h)", "15m")
+		ask("KROOS_HEARTBEAT_MODEL", "Model override for heartbeat turns (blank = same as default)", "")
 		fmt.Fprintln(out, "  Target: where to deliver non-empty heartbeat replies.")
 		fmt.Fprintln(out, "    cli      — print to terminal (default)")
 		fmt.Fprintln(out, "    none     — run silently, no output")
 		fmt.Fprintln(out, "    imessage — send to an iMessage handle (requires iMessage channel)")
 		fmt.Fprintln(out, "    discord  — send to a Discord channel/user (requires Discord channel)")
-		ask("YAK_HEARTBEAT_TARGET", "Delivery target", "cli")
-		ask("YAK_HEARTBEAT_TO", "Recipient handle or channel ID (leave blank for cli/none)", "")
+		ask("KROOS_HEARTBEAT_TARGET", "Delivery target", "cli")
+		ask("KROOS_HEARTBEAT_TO", "Recipient handle or channel ID (leave blank for cli/none)", "")
 		fmt.Fprintln(out, "  Optional prompt override: leave blank to use the built-in meal check-in behavior.")
-		ask("YAK_HEARTBEAT_PROMPT", "Prompt override", "")
+		ask("KROOS_HEARTBEAT_PROMPT", "Prompt override", "")
 		if promptYesNo(reader, out, "Restrict to active hours?", false) {
-			ask("YAK_HEARTBEAT_ACTIVE_HOURS_START", "Active hours start (HH:MM, 24h)", "09:00")
-			ask("YAK_HEARTBEAT_ACTIVE_HOURS_END", "Active hours end   (HH:MM, 24h)", "22:00")
-			ask("YAK_HEARTBEAT_TIMEZONE", "Timezone (IANA, e.g. America/New_York; blank = local)", "")
+			ask("KROOS_HEARTBEAT_ACTIVE_HOURS_START", "Active hours start (HH:MM, 24h)", "09:00")
+			ask("KROOS_HEARTBEAT_ACTIVE_HOURS_END", "Active hours end   (HH:MM, 24h)", "22:00")
+			ask("KROOS_HEARTBEAT_TIMEZONE", "Timezone (IANA, e.g. America/New_York; blank = local)", "")
 		}
 	}
 
 	fmt.Fprintln(out, "\n== iMessage channel (BlueBubbles) ==")
 	if promptYesNo(reader, out, "Enable iMessage channel?", false) {
-		ask("YAK_IMESSAGE_SERVER_URL", "BlueBubbles server URL", "")
-		ask("YAK_IMESSAGE_PASSWORD", "BlueBubbles password", "")
-		ask("YAK_IMESSAGE_WEBHOOK_PORT", "Webhook port", "8421")
-		ask("YAK_IMESSAGE_WEBHOOK_PATH", "Webhook path", "/bluebubbles")
-		ask("YAK_IMESSAGE_OWNER_HANDLES", "Owner handles (comma-separated)", "")
-		ask("YAK_IMESSAGE_GROUP_TAG", "Group tag (e.g. @yak)", "")
+		ask("KROOS_IMESSAGE_SERVER_URL", "BlueBubbles server URL", "")
+		ask("KROOS_IMESSAGE_PASSWORD", "BlueBubbles password", "")
+		ask("KROOS_IMESSAGE_WEBHOOK_PORT", "Webhook port", "8421")
+		ask("KROOS_IMESSAGE_WEBHOOK_PATH", "Webhook path", "/bluebubbles")
+		ask("KROOS_IMESSAGE_OWNER_HANDLES", "Owner handles (comma-separated)", "")
+		ask("KROOS_IMESSAGE_GROUP_TAG", "Group tag (e.g. @kroos)", "")
 	}
 
 	fmt.Fprintln(out, "\n== Discord channel ==")
 	if promptYesNo(reader, out, "Enable Discord channel?", false) {
-		ask("YAK_DISCORD_TOKEN", "Discord bot token", "")
-		ask("YAK_DISCORD_OWNER_IDS", "Owner user IDs (comma-separated)", "")
-		ask("YAK_DISCORD_GUILD_TAG", "Guild tag (e.g. @yak)", "")
+		ask("KROOS_DISCORD_TOKEN", "Discord bot token", "")
+		ask("KROOS_DISCORD_OWNER_IDS", "Owner user IDs (comma-separated)", "")
+		ask("KROOS_DISCORD_GUILD_TAG", "Guild tag (e.g. @kroos)", "")
 	}
 
 	if len(newEnv) == 0 {
@@ -134,7 +134,7 @@ func runInit(args []string) error {
 		fmt.Fprintf(out, "\nAppended %d key(s) to .env\n", len(newEnv))
 	}
 
-	fmt.Fprintln(out, "\nDone. Run `yak` to start.")
+	fmt.Fprintln(out, "\nDone. Run `kroos` to start.")
 	return nil
 }
 

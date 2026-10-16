@@ -3,7 +3,7 @@ package webui
 import (
 	"encoding/json"
 
-	"yak-go/internal/tools"
+	"github.com/s-ramirez/kroos-core/internal/tools"
 )
 
 type webuiHook struct {

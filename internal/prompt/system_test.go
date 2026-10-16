@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"yak-go/internal/tools"
+	"github.com/s-ramirez/kroos-core/internal/tools"
 )
 
 func TestBuildSystemPromptIncludesToolSections(t *testing.T) {

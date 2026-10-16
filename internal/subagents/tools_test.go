@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"yak-go/internal/llm"
-	"yak-go/internal/tools"
-	"yak-go/internal/types"
+	"github.com/s-ramirez/kroos-core/internal/llm"
+	"github.com/s-ramirez/kroos-core/internal/tools"
+	"github.com/s-ramirez/kroos-core/internal/types"
 )
 
 type recordingClient struct {

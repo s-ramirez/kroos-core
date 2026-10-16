@@ -9,16 +9,16 @@ import (
 	"sync"
 	"time"
 
-	"yak-go/internal/types"
+	"github.com/s-ramirez/kroos-core/internal/types"
 )
 
 // LoggingClient wraps a ChatClient and logs every request and response
 // as pretty-printed JSON files in a per-session directory.
 type LoggingClient struct {
-	inner   ChatClient
-	logDir  string
-	seq     int
-	mu      sync.Mutex
+	inner  ChatClient
+	logDir string
+	seq    int
+	mu     sync.Mutex
 }
 
 // NewLoggingClient wraps inner and writes logs to sessionDir.

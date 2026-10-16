@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"yak-go/internal/types"
+	"github.com/s-ramirez/kroos-core/internal/types"
 )
 
 type ChatClient interface {

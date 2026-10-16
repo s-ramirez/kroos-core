@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"yak-go/internal/channel"
+	"github.com/s-ramirez/kroos-core/internal/channel"
 )
 
 const (

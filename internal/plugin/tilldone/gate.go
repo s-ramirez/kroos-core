@@ -3,7 +3,7 @@ package tilldone
 import (
 	"encoding/json"
 
-	"yak-go/internal/tools"
+	"github.com/s-ramirez/kroos-core/internal/tools"
 )
 
 // tilldoneGate blocks non-tilldone tool calls when task discipline is violated.
@@ -48,4 +48,5 @@ func (g *tilldoneGate) BeforeToolCall(_ tools.HookContext, name string, _ json.R
 	return ""
 }
 
-func (g *tilldoneGate) AfterToolCall(_ tools.HookContext, _ string, _ json.RawMessage, _ tools.ToolResult, _ error) {}
+func (g *tilldoneGate) AfterToolCall(_ tools.HookContext, _ string, _ json.RawMessage, _ tools.ToolResult, _ error) {
+}

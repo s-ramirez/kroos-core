@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"yak-go/internal/skills"
+	"github.com/s-ramirez/kroos-core/internal/skills"
 )
 
 const (

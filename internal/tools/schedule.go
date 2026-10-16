@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"yak-go/internal/schedule"
+	"github.com/s-ramirez/kroos-core/internal/schedule"
 )
 
 // ScheduleTool is the model-facing surface for the persistent task scheduler.
@@ -35,7 +35,7 @@ var scheduleDefinition = ToolDefinition{
 		"Use action=add with kind=cron and a 5-field cron expression (\"min hour dom month dow\") for calendar-aligned recurring tasks (e.g. \"0 9 * * 1-5\" for weekday 9am).",
 		"When a scheduled event fires, you will see a <scheduled_event> tag in a user message — treat it as a wakeup signal, not direct user input.",
 		"Durations use Go syntax: \"15m\", \"1h30m\", \"24h\". Days are not supported — use \"24h\" for daily.",
-		"list returns user-managed jobs only; the heartbeat (if configured via YAK_HEARTBEAT_INTERVAL) does not appear here.",
+		"list returns user-managed jobs only; the heartbeat (if configured via KROOS_HEARTBEAT_INTERVAL) does not appear here.",
 	},
 	Parameters: JSONSchema{
 		"type": "object",

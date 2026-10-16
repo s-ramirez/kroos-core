@@ -14,23 +14,24 @@ import (
 	"strings"
 	"time"
 
-	"yak-go/internal/channel"
-	clichannel "yak-go/internal/channel/cli"
-	discordchannel "yak-go/internal/channel/discord"
-	imessagechannel "yak-go/internal/channel/imessage"
-	"yak-go/internal/channel/sched"
-	"yak-go/internal/cli"
-	"yak-go/internal/compaction"
-	heartbeatPkg "yak-go/internal/heartbeat"
-	"yak-go/internal/llm"
-	"yak-go/internal/memory"
-	"yak-go/internal/plugin"
-	"yak-go/internal/plugin/webui"
-	"yak-go/internal/prompt"
-	"yak-go/internal/schedule"
-	"yak-go/internal/skills"
-	"yak-go/internal/subagents"
-	"yak-go/internal/tools"
+	"github.com/s-ramirez/kroos-core/internal/channel"
+	clichannel "github.com/s-ramirez/kroos-core/internal/channel/cli"
+	discordchannel "github.com/s-ramirez/kroos-core/internal/channel/discord"
+	imessagechannel "github.com/s-ramirez/kroos-core/internal/channel/imessage"
+	"github.com/s-ramirez/kroos-core/internal/channel/sched"
+	telegramchannel "github.com/s-ramirez/kroos-core/internal/channel/telegram"
+	"github.com/s-ramirez/kroos-core/internal/cli"
+	"github.com/s-ramirez/kroos-core/internal/compaction"
+	heartbeatPkg "github.com/s-ramirez/kroos-core/internal/heartbeat"
+	"github.com/s-ramirez/kroos-core/internal/llm"
+	"github.com/s-ramirez/kroos-core/internal/memory"
+	"github.com/s-ramirez/kroos-core/internal/plugin"
+	"github.com/s-ramirez/kroos-core/internal/plugin/webui"
+	"github.com/s-ramirez/kroos-core/internal/prompt"
+	"github.com/s-ramirez/kroos-core/internal/schedule"
+	"github.com/s-ramirez/kroos-core/internal/skills"
+	"github.com/s-ramirez/kroos-core/internal/subagents"
+	"github.com/s-ramirez/kroos-core/internal/tools"
 )
 
 func main() {
@@ -46,23 +47,23 @@ func main() {
 		fmt.Fprintf(os.Stderr, "warning: loading .env: %v\n", err)
 	}
 
-	baseURL := os.Getenv("YAK_BASE_URL")
+	baseURL := os.Getenv("KROOS_BASE_URL")
 	if baseURL == "" {
 		baseURL = "https://api.openai.com"
 	}
 
-	model := os.Getenv("YAK_MODEL")
+	model := os.Getenv("KROOS_MODEL")
 	if model == "" {
 		model = "gpt-5.4"
 	}
 
-	apiKey := os.Getenv("YAK_API_KEY")
+	apiKey := os.Getenv("KROOS_API_KEY")
 
 	cwd, _ := os.Getwd()
 	home, _ := os.UserHomeDir()
 	agentDirs := []string{
-		filepath.Join(home, ".yak"),
-		filepath.Join(cwd, ".yak"),
+		filepath.Join(home, ".kroos"),
+		filepath.Join(cwd, ".kroos"),
 	}
 	agentCfg, err := subagents.LoadAgentConfig(agentDirs...)
 	if err != nil {
@@ -72,7 +73,7 @@ func main() {
 	if agentCfg != nil {
 		baseURL = agentCfg.BaseURL
 		if baseURL == "" {
-			baseURL = os.Getenv("YAK_BASE_URL")
+			baseURL = os.Getenv("KROOS_BASE_URL")
 			if baseURL == "" {
 				baseURL = "https://api.openai.com"
 			}
@@ -84,8 +85,8 @@ func main() {
 		}
 	}
 
-	llmTimeout := envDuration("YAK_LLM_TIMEOUT", 300*time.Second)
-	subagentLLMTimeout := envDuration("YAK_SUBAGENT_LLM_TIMEOUT", llmTimeout)
+	llmTimeout := envDuration("KROOS_LLM_TIMEOUT", 300*time.Second)
+	subagentLLMTimeout := envDuration("KROOS_SUBAGENT_LLM_TIMEOUT", llmTimeout)
 
 	client := llm.NewClient(baseURL, model, &llm.Options{
 		Timeout: llmTimeout,
@@ -94,7 +95,7 @@ func main() {
 
 	var chatClient llm.ChatClient = client
 	var sessionDir string
-	logDir := os.Getenv("YAK_LOG_DIR")
+	logDir := os.Getenv("KROOS_LOG_DIR")
 	if logDir != "" {
 		sessionDir = filepath.Join(logDir, time.Now().Format("20060102-150405"))
 		lc, err := llm.NewLoggingClient(client, sessionDir)
@@ -108,10 +109,10 @@ func main() {
 
 	// Initialize plugins.
 	var plugins []plugin.Plugin
-	if portStr := os.Getenv("YAK_WEBUI_PORT"); portStr != "" {
+	if portStr := os.Getenv("KROOS_WEBUI_PORT"); portStr != "" {
 		port, err := strconv.Atoi(portStr)
 		if err != nil || port <= 0 {
-			fmt.Fprintf(os.Stderr, "warning: invalid YAK_WEBUI_PORT %q, using 8420\n", portStr)
+			fmt.Fprintf(os.Stderr, "warning: invalid KROOS_WEBUI_PORT %q, using 8420\n", portStr)
 			port = 8420
 		}
 		plugins = append(plugins, webui.New(port))
@@ -127,8 +128,8 @@ func main() {
 	}
 
 	subagentDirs := []string{
-		filepath.Join(home, ".yak", "subagents"),
-		filepath.Join(cwd, ".yak", "subagents"),
+		filepath.Join(home, ".kroos", "subagents"),
+		filepath.Join(cwd, ".kroos", "subagents"),
 	}
 	defs, subagentDiags, err := subagents.LoadDefinitions(subagentDirs...)
 	if err != nil {
@@ -139,27 +140,38 @@ func main() {
 	}
 	searchDelegationGuidelines := subagents.SearchDelegationGuidelines(defs)
 
-	memoryStore := memory.NewStore(filepath.Join(cwd, ".yak", "memory"))
+	profiles, profileDiags, err := subagents.LoadProfiles(
+		filepath.Join(home, ".kroos", "profiles"),
+		filepath.Join(cwd, ".kroos", "profiles"),
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: loading profiles: %v\n", err)
+	}
+	for _, d := range profileDiags {
+		fmt.Fprintf(os.Stderr, "warning: %s\n", d)
+	}
+
+	memoryStore := memory.NewStore(filepath.Join(cwd, ".kroos", "memory"))
 
 	// Per-(channel, thread) isolation for non-CLI channels. CLI and sched
 	// keep the shared project workspace + memory; discord/imessage/etc
 	// get their own workspace dir and memory dir provisioned on first
 	// inbound message.
-	yakStateDir := filepath.Join(cwd, ".yak", "state")
-	yakWorkspacesDir := filepath.Join(cwd, ".yak", "workspaces")
-	yakMemoryDir := filepath.Join(cwd, ".yak", "memory")
+	kroosStateDir := filepath.Join(cwd, ".kroos", "state")
+	kroosWorkspacesDir := filepath.Join(cwd, ".kroos", "workspaces")
+	kroosMemoryDir := filepath.Join(cwd, ".kroos", "memory")
 	provisioner := &threadProvisioner{
 		exempt:         map[string]bool{clichannel.Name: true, sched.Name: true},
-		workspacesRoot: yakWorkspacesDir,
-		memoryRoot:     yakMemoryDir,
+		workspacesRoot: kroosWorkspacesDir,
+		memoryRoot:     kroosMemoryDir,
 	}
-	convStore := channel.NewPersistentStore(yakStateDir, provisioner)
+	convStore := channel.NewPersistentStore(kroosStateDir, provisioner)
 
 	// runnerRef is populated after the Runner is constructed; the memory
 	// tool closes over it to route each call to the turn's active store.
 	var runnerRef *cli.Runner
 
-	scheduleStore, err := schedule.NewStore(filepath.Join(cwd, ".yak", "schedule"))
+	scheduleStore, err := schedule.NewStore(filepath.Join(cwd, ".kroos", "schedule"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: loading schedule store: %v\n", err)
 	}
@@ -188,6 +200,28 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Discord channel disabled (%s)\n", discReason)
 	}
 
+	telegramCfg, tgReason, err := telegramchannel.ConfigFromEnv(os.Getenv, envBool)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v; Telegram channel disabled\n", err)
+	} else if tgReason != "" {
+		fmt.Fprintf(os.Stderr, "Telegram channel disabled (%s)\n", tgReason)
+	}
+
+	// Profiles with senders: any open their bound group threads to non-owners.
+	for _, p := range profiles {
+		if p.Senders != subagents.SendersAny {
+			continue
+		}
+		switch {
+		case p.Channel == "discord" && discordCfg != nil:
+			discordCfg.OpenChannels = append(discordCfg.OpenChannels, p.Threads...)
+		case p.Channel == "imessage" && imsgCfg != nil:
+			imsgCfg.OpenChats = append(imsgCfg.OpenChats, p.Threads...)
+		case p.Channel == "telegram" && telegramCfg != nil:
+			telegramCfg.OpenChats = append(telegramCfg.OpenChats, p.Threads...)
+		}
+	}
+
 	builtinTools := []tools.Tool{
 		tools.NewReadTool(tools.OSFS{}),
 		tools.NewWriteTool(tools.OSFS{}),
@@ -208,6 +242,21 @@ func main() {
 	if scheduleStore != nil {
 		builtinTools = append(builtinTools, tools.NewScheduleTool(scheduleStore))
 	}
+	// send_file resolves the channel registry lazily: channels are
+	// registered after tools are built.
+	var channelsRef *channel.Registry
+	if imsgCfg != nil || discordCfg != nil || telegramCfg != nil {
+		builtinTools = append(builtinTools, tools.NewSendFileTool(func(ctx context.Context, out channel.Outbound) error {
+			if channelsRef == nil {
+				return fmt.Errorf("channels not ready")
+			}
+			ch, ok := channelsRef.Lookup(out.Channel)
+			if !ok {
+				return fmt.Errorf("channel %q not available", out.Channel)
+			}
+			return ch.Send(ctx, out)
+		}))
+	}
 	if imsgCfg != nil {
 		builtinTools = append(builtinTools, tools.NewIMessageSendTool(tools.IMessageSendConfig{
 			ServerURL: imsgCfg.ServerURL,
@@ -219,6 +268,14 @@ func main() {
 			Token: discordCfg.Token,
 		}))
 	}
+	if telegramCfg != nil {
+		builtinTools = append(builtinTools, tools.NewTelegramSendTool(tools.TelegramSendConfig{
+			Token: telegramCfg.Token,
+		}))
+	}
+	// Profiles pick from the unfiltered builtins; AGENTS.md's tool
+	// allowlist only applies to the main agent.
+	profileToolPool := append([]tools.Tool(nil), builtinTools...)
 	var allowedTools, allowedPlugins map[string]struct{}
 	if agentCfg != nil {
 		allowedTools = nameSet(agentCfg.Tools)
@@ -281,8 +338,8 @@ func main() {
 	}
 
 	skillDirs := []string{
-		filepath.Join(home, ".yak", "skills"),
-		filepath.Join(cwd, ".yak", "skills"),
+		filepath.Join(home, ".kroos", "skills"),
+		filepath.Join(cwd, ".kroos", "skills"),
 	}
 	loadedSkills, diags, err := skills.LoadSkills(skillDirs...)
 	if err != nil {
@@ -303,8 +360,8 @@ func main() {
 		skillsRegistry.Replace(reloaded)
 		return nil
 	}
-	projectSkillsDir := filepath.Join(cwd, ".yak", "skills")
-	skillWriteLogPath := filepath.Join(cwd, ".yak", "logs", "skill_writes.log")
+	projectSkillsDir := filepath.Join(cwd, ".kroos", "skills")
+	skillWriteLogPath := filepath.Join(cwd, ".kroos", "logs", "skill_writes.log")
 	// skill_write is orchestrator-only — appended to allTools, not builtinTools,
 	// so subagents don't inherit it.
 	allTools = append(allTools, tools.NewSkillWriteTool(projectSkillsDir, skillWriteLogPath, reloadSkills))
@@ -361,6 +418,7 @@ func main() {
 
 	var userActivity bool
 	runner := cli.Runner{
+		ImageInput:       envBool("KROOS_IMAGE_INPUT", true),
 		Client:           chatClient,
 		Registry:         registry,
 		Skills:           skillsRegistry,
@@ -388,6 +446,33 @@ func main() {
 
 	runnerRef = &runner
 
+	routes := make(map[channel.Key]channel.TurnHandler)
+	for _, p := range profiles {
+		configured := map[string]bool{"discord": discordCfg != nil, "imessage": imsgCfg != nil, "telegram": telegramCfg != nil}
+		if !configured[p.Channel] {
+			fmt.Fprintf(os.Stderr, "warning: profile %q bound to %s, which is not configured; skipping\n", p.Name, p.Channel)
+			continue
+		}
+		pr := buildProfileRunner(p, profileToolPool, baseHooks, memoryStore, func(def subagents.Definition) llm.ChatClient {
+			if def.Model == "" {
+				return chatClient
+			}
+			u := def.BaseURL
+			if u == "" {
+				u = baseURL
+			}
+			key := apiKey
+			if def.APIKeyEnv != "" {
+				key = os.Getenv(def.APIKeyEnv)
+			}
+			return llm.NewClient(u, def.Model, &llm.Options{Timeout: llmTimeout, APIKey: key})
+		})
+		for _, t := range p.Threads {
+			routes[channel.Key{Channel: p.Channel, Thread: t}] = pr
+		}
+		fmt.Fprintf(os.Stderr, "profile %q bound to %s threads %v (senders=%s)\n", p.Name, p.Channel, p.Threads, p.Senders)
+	}
+
 	runCtx, cancelRun := context.WithCancel(context.Background())
 	defer cancelRun()
 	if scheduler != nil {
@@ -405,8 +490,13 @@ func main() {
 	if discordCfg != nil {
 		discordChannel = discordchannel.New(*discordCfg)
 	}
+	var telegramChannel *telegramchannel.Channel
+	if telegramCfg != nil {
+		telegramChannel = telegramchannel.New(*telegramCfg)
+	}
 
 	channels := channel.NewRegistry()
+	channelsRef = channels
 	cliCh := clichannel.NewStdio(os.Stdin, os.Stdout)
 	channels.Register(cliCh)
 	if scheduler != nil {
@@ -439,7 +529,7 @@ func main() {
 						return ch.Send(ctx, channel.Outbound{Channel: "imessage", Thread: to, Content: content})
 					}
 				} else {
-					fmt.Fprintf(os.Stderr, "warning: heartbeat target=imessage but iMessage not configured or YAK_HEARTBEAT_TO not set\n")
+					fmt.Fprintf(os.Stderr, "warning: heartbeat target=imessage but iMessage not configured or KROOS_HEARTBEAT_TO not set\n")
 				}
 			case "discord":
 				if discordChannel != nil && hbCfg.To != "" {
@@ -448,7 +538,16 @@ func main() {
 						return ch.Send(ctx, channel.Outbound{Channel: "discord", Thread: to, Content: content})
 					}
 				} else {
-					fmt.Fprintf(os.Stderr, "warning: heartbeat target=discord but Discord not configured or YAK_HEARTBEAT_TO not set\n")
+					fmt.Fprintf(os.Stderr, "warning: heartbeat target=discord but Discord not configured or KROOS_HEARTBEAT_TO not set\n")
+				}
+			case "telegram":
+				if telegramChannel != nil && hbCfg.To != "" {
+					ch, to := telegramChannel, hbCfg.To
+					delivery.OutboundSend = func(ctx context.Context, content string) error {
+						return ch.Send(ctx, channel.Outbound{Channel: "telegram", Thread: to, Content: content})
+					}
+				} else {
+					fmt.Fprintf(os.Stderr, "warning: heartbeat target=telegram but Telegram not configured or KROOS_HEARTBEAT_TO not set\n")
 				}
 			}
 			schedCh.Heartbeat = delivery
@@ -459,24 +558,24 @@ func main() {
 	// Register messaging channels (instances were created above).
 	if imsgChannel != nil {
 		channels.Register(imsgChannel)
-		webhookPath := imsgCfg.WebhookPath
-		if webhookPath == "" {
-			webhookPath = "/bluebubbles"
-		}
-		fmt.Fprintf(os.Stderr, "iMessage channel enabled (webhook :%d%s)\n",
-			imsgCfg.WebhookPort, webhookPath)
+		fmt.Fprintf(os.Stderr, "iMessage channel enabled (webhook %s)\n", imsgChannel.ListenAddr())
 	}
 	if discordChannel != nil {
 		channels.Register(discordChannel)
 		fmt.Fprintf(os.Stderr, "Discord channel enabled (owners=%d, tag=%q)\n",
 			len(discordCfg.OwnerIDs), discordCfg.GuildTag)
 	}
+	if telegramChannel != nil {
+		channels.Register(telegramChannel)
+		fmt.Fprintf(os.Stderr, "Telegram channel enabled (owners=%d, tag=%q)\n",
+			len(telegramCfg.OwnerIDs), telegramCfg.GroupTag)
+	}
 
 	dispatcher := &channel.Dispatcher{
 		Channels:    channels,
 		Store:       convStore,
 		Commands:    &channel.CommandExpander{Skills: skillsRegistry},
-		Handler:     &runner,
+		Handler:     &channel.Router{Default: &runner, Routes: routes},
 		OnUserInput: func() { userActivity = true },
 		Logger: func(format string, args ...any) {
 			fmt.Fprintf(os.Stderr, "[dispatcher] "+format+"\n", args...)
@@ -493,6 +592,35 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", runErr)
 		os.Exit(1)
 	}
+}
+
+// buildProfileRunner assembles an isolated Runner for a profile: its own
+// prompt, model, and a tool registry restricted to the profile's
+// allowlist. The memory tool is rebuilt so it resolves against this
+// runner's per-turn store instead of the main runner's.
+func buildProfileRunner(p subagents.Profile, pool []tools.Tool, hooks []tools.ToolHook, defaultMemory *memory.Store, clientFor func(subagents.Definition) llm.ChatClient) *cli.Runner {
+	pr := &cli.Runner{
+		Client:      clientFor(p.Definition),
+		Skills:      skills.NewRegistry(nil),
+		AgentID:     "profile-" + p.Name,
+		AgentName:   p.Name,
+		Prompt:      p.Prompt,
+		ContextSize: p.ContextSize,
+		MemoryStore: defaultMemory,
+		Compaction:  compaction.DefaultSettings,
+		ImageInput:  envBool("KROOS_IMAGE_INPUT", true),
+	}
+	selected := filterTools(pool, nameSet(p.Tools))
+	for i, t := range selected {
+		if t.Definition().Name == "memory" {
+			selected[i] = tools.NewMemoryToolResolving(pr.ActiveMemoryStore, defaultMemory)
+		}
+	}
+	pr.Registry = tools.NewRegistry(selected...)
+	for _, h := range hooks {
+		pr.Registry.AddHook(h)
+	}
+	return pr
 }
 
 type logHook struct {

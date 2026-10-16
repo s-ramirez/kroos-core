@@ -3,7 +3,7 @@ package compaction
 import (
 	"encoding/json"
 
-	"yak-go/internal/types"
+	"github.com/s-ramirez/kroos-core/internal/types"
 )
 
 // EstimateTokens returns a conservative chars/4 estimate for a single message.

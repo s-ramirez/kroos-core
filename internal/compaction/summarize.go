@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"yak-go/internal/llm"
-	"yak-go/internal/types"
+	"github.com/s-ramirez/kroos-core/internal/llm"
+	"github.com/s-ramirez/kroos-core/internal/types"
 )
 
 // SummarizationSystemPrompt is ported verbatim from Pi SDK

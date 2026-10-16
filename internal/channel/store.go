@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"yak-go/internal/memory"
-	"yak-go/internal/types"
+	"github.com/s-ramirez/kroos-core/internal/memory"
+	"github.com/s-ramirez/kroos-core/internal/types"
 )
 
 // Provisioner allocates per-conversation resources (workspace dir,
@@ -38,6 +38,11 @@ type Conversation struct {
 	// ModelOverride, if non-empty, is set by the dispatcher from the
 	// inbound message and cleared after the turn.
 	ModelOverride string
+
+	// Attachments, if non-empty, are the current turn's inbound media.
+	// Set by the dispatcher from the inbound message and cleared after
+	// the turn.
+	Attachments []Attachment
 
 	// Compaction state scoped to this conversation.
 	LastSummary    string

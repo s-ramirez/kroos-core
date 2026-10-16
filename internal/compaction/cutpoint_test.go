@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"yak-go/internal/types"
+	"github.com/s-ramirez/kroos-core/internal/types"
 )
 
 func TestFindCutPointKeepsRecentTurns(t *testing.T) {

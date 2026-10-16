@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"yak-go/internal/types"
+	"github.com/s-ramirez/kroos-core/internal/types"
 )
 
 type stubClient struct {

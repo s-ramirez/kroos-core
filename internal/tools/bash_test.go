@@ -51,7 +51,7 @@ func TestBashToolRunsPipeline(t *testing.T) {
 func TestBashToolUsesWorkingDirectory(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sample.txt")
-	if err := os.WriteFile(path, []byte("yak"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("kroos"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -71,7 +71,7 @@ func TestBashToolUsesWorkingDirectory(t *testing.T) {
 	if !strings.Contains(result.Output, "cwd: "+dir) {
 		t.Fatalf("expected cwd in output, got %q", result.Output)
 	}
-	if !strings.Contains(result.Output, "stdout:\nyak") {
+	if !strings.Contains(result.Output, "stdout:\nkroos") {
 		t.Fatalf("expected file contents in output, got %q", result.Output)
 	}
 }

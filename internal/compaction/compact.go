@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"yak-go/internal/llm"
-	"yak-go/internal/types"
+	"github.com/s-ramirez/kroos-core/internal/llm"
+	"github.com/s-ramirez/kroos-core/internal/types"
 )
 
 // Settings controls when and how compaction runs.

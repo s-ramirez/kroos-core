@@ -10,17 +10,17 @@ import (
 	"strings"
 	"time"
 
-	"yak-go/internal/channel"
-	"yak-go/internal/compaction"
-	heartbeatPkg "yak-go/internal/heartbeat"
-	"yak-go/internal/llm"
-	"yak-go/internal/memory"
-	"yak-go/internal/plugin"
-	"yak-go/internal/prompt"
-	"yak-go/internal/schedule"
-	"yak-go/internal/skills"
-	"yak-go/internal/tools"
-	"yak-go/internal/types"
+	"github.com/s-ramirez/kroos-core/internal/channel"
+	"github.com/s-ramirez/kroos-core/internal/compaction"
+	heartbeatPkg "github.com/s-ramirez/kroos-core/internal/heartbeat"
+	"github.com/s-ramirez/kroos-core/internal/llm"
+	"github.com/s-ramirez/kroos-core/internal/memory"
+	"github.com/s-ramirez/kroos-core/internal/plugin"
+	"github.com/s-ramirez/kroos-core/internal/prompt"
+	"github.com/s-ramirez/kroos-core/internal/schedule"
+	"github.com/s-ramirez/kroos-core/internal/skills"
+	"github.com/s-ramirez/kroos-core/internal/tools"
+	"github.com/s-ramirez/kroos-core/internal/types"
 )
 
 // Runner holds the long-lived agent configuration. It exposes three
@@ -33,14 +33,14 @@ import (
 //   - DistillMemory: a silent single-turn run that asks the model to
 //     refresh MEMORY.md at session exit.
 type Runner struct {
-	Client          llm.ChatClient
-	Registry        *tools.Registry
-	Skills          *skills.Registry
+	Client   llm.ChatClient
+	Registry *tools.Registry
+	Skills   *skills.Registry
 	// AfterTurnHooks run after each assistant text response. The first hook
 	// that returns a non-empty string wins: its message is appended as a user
 	// turn, the agent loop continues, and remaining hooks are skipped for
 	// that turn. Register higher-priority hooks earlier in the slice.
-	AfterTurnHooks []plugin.AfterTurnHook
+	AfterTurnHooks  []plugin.AfterTurnHook
 	AgentStartHooks []plugin.AgentStartHook
 	AgentEndHooks   []plugin.AgentEndHook
 	PluginPrompts   []string
@@ -48,7 +48,7 @@ type Runner struct {
 	AgentName       string // human-readable name
 	Prompt          string // opening of the system prompt (from AGENTS.md body)
 	// ContextFiles are embedded verbatim at the top of the system prompt.
-	// Typically IDENTITY.md and USER.md from the .yak/ workspace.
+	// Typically IDENTITY.md and USER.md from the .kroos/ workspace.
 	ContextFiles []prompt.ContextFile
 	ContextSize  int // model context window in tokens; 0 = unknown
 	OnUsage      func(usage *types.Usage)
@@ -69,6 +69,11 @@ type Runner struct {
 	// scheduler's event stream is handled by the sched channel adapter,
 	// not by the Runner directly.
 	Scheduler *schedule.Scheduler
+
+	// ImageInput, if true, inlines image attachments as image_url content
+	// parts for vision-capable models. Other attachments (and all of them
+	// when false) are referenced by local path only.
+	ImageInput bool
 
 	// HeartbeatEnabled, if true, injects HEARTBEAT_OK usage instructions
 	// into the system prompt so the model knows how to suppress no-op
@@ -116,7 +121,7 @@ func (r *Runner) HandleTurn(ctx context.Context, conv *channel.Conversation, use
 	}
 
 	// Use a model-specific client when the turn requests an override
-	// (e.g. a heartbeat configured with YAK_HEARTBEAT_MODEL).
+	// (e.g. a heartbeat configured with KROOS_HEARTBEAT_MODEL).
 	client := r.Client
 	if conv.ModelOverride != "" && r.ClientForModel != nil {
 		if override := r.ClientForModel(conv.ModelOverride); override != nil {
@@ -155,8 +160,9 @@ func (r *Runner) HandleTurn(ctx context.Context, conv *channel.Conversation, use
 
 	conv.Messages = append(conv.Messages, types.Message{
 		Role:    "user",
-		Content: userContent,
+		Content: buildUserContent(userContent, conv.Attachments, r.ImageInput),
 	})
+	ctx = channel.WithKey(ctx, conv.Key)
 
 	var toolSchemas []types.ChatRequestTool
 	if r.Registry != nil {

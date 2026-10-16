@@ -103,12 +103,12 @@ func (t *WebSearchTool) Execute(ctx context.Context, raw json.RawMessage) (ToolR
 		return errorResult("query is required"), nil
 	}
 
-	apiKey := strings.TrimSpace(os.Getenv("YAK_BRAVE_API_KEY"))
+	apiKey := strings.TrimSpace(os.Getenv("KROOS_BRAVE_API_KEY"))
 	if apiKey == "" {
 		apiKey = strings.TrimSpace(os.Getenv("BRAVE_API_KEY"))
 	}
 	if apiKey == "" {
-		return errorResult("web_search requires YAK_BRAVE_API_KEY or BRAVE_API_KEY"), nil
+		return errorResult("web_search requires KROOS_BRAVE_API_KEY or BRAVE_API_KEY"), nil
 	}
 
 	count := params.Count

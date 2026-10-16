@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"yak-go/internal/schedule"
+	"github.com/s-ramirez/kroos-core/internal/schedule"
 )
 
 func TestFormatEventEmitsScheduledEventXML(t *testing.T) {

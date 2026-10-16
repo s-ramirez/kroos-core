@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"yak-go/internal/memory"
+	"github.com/s-ramirez/kroos-core/internal/memory"
 )
 
 // memoryTool is a thin adapter over *memory.Store that exposes four
 // actions (read, write, search, list) through a single OpenAI-compatible
-// tool. All paths are relative to .yak/memory/; the store enforces the
+// tool. All paths are relative to .kroos/memory/; the store enforces the
 // sandbox.
 type memoryTool struct {
 	store   *memory.Store
@@ -54,7 +54,7 @@ type MemoryParams struct {
 
 var memoryDefinition = ToolDefinition{
 	Name: "memory",
-	Description: "Read/write/search/list the agent's persistent memory store (.yak/memory/). " +
+	Description: "Read/write/search/list the agent's persistent memory store (.kroos/memory/). " +
 		"Paths are relative to the memory root (e.g. \"MEMORY.md\", \"sessions/2026-04-13-1422.md\", \"vault/Knowledge/foo.md\").",
 	Guidelines: []string{
 		"Use action=read to recall prior context before answering questions about past sessions, user preferences, or durable facts.",
@@ -70,7 +70,7 @@ var memoryDefinition = ToolDefinition{
 				"type": "string",
 				"enum": []string{"read", "write", "search", "list"},
 			},
-			"path":        map[string]any{"type": "string", "description": "Path relative to .yak/memory/ (read/write)"},
+			"path":        map[string]any{"type": "string", "description": "Path relative to .kroos/memory/ (read/write)"},
 			"offset":      map[string]any{"type": "number", "description": "1-indexed line to start at (read only)"},
 			"limit":       map[string]any{"type": "number", "description": "Maximum lines to return (read only)"},
 			"content":     map[string]any{"type": "string", "description": "Content to write (write only)"},

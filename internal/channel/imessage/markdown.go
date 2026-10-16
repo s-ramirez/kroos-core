@@ -16,10 +16,10 @@ var (
 	reExtraNewlines = regexp.MustCompile(`\n{3,}`)
 )
 
-// stripMarkdown removes common Markdown formatting that would render as
+// StripMarkdown removes common Markdown formatting that would render as
 // literal punctuation in iMessage. The output is plain text suitable for
 // sending via the BlueBubbles API.
-func stripMarkdown(s string) string {
+func StripMarkdown(s string) string {
 	// Remove horizontal rules entirely.
 	s = reHR.ReplaceAllString(s, "")
 	// Strip header sigils (### Title → Title).
