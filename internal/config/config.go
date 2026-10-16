@@ -24,8 +24,11 @@ type Key struct {
 
 // Keys is the registry of every configurable setting.
 var Keys = []Key{
-	{"model", "KROOS_MODEL", "gpt-5.4", "Model name", false},
+	{"model", "KROOS_MODEL", "", "Model for the selected provider (default: <provider>.model)", false},
 	{"provider", "KROOS_PROVIDER", "chatgpt", "LLM provider: chatgpt | omlx", false},
+	{"fallback", "KROOS_FALLBACK", "true", "Fall back to the other provider when one fails", false},
+	{"chatgpt.model", "KROOS_CHATGPT_MODEL", "gpt-5.4", "Default ChatGPT model", false},
+	{"omlx.model", "KROOS_OMLX_MODEL", "", "Default oMLX model (empty = first served)", false},
 	{"omlx.url", "KROOS_OMLX_URL", "http://100.111.194.53:8000", "oMLX server URL", false},
 	{"omlx.api_key", "KROOS_OMLX_API_KEY", "", "oMLX API key", true},
 	{"llm.timeout", "KROOS_LLM_TIMEOUT", "5m", "LLM request timeout", false},

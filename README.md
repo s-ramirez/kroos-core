@@ -35,7 +35,10 @@ Available settings:
 | Variable            | Default                     | Description                                           |
 |---------------------|-----------------------------|-------------------------------------------------------|
 | `KROOS_PROVIDER`      | `chatgpt`                   | `chatgpt` (subscription, `kroos login`) or `omlx`     |
-| `KROOS_MODEL`         | `gpt-5.4`                   | Model name to use in API requests                     |
+| `KROOS_MODEL`         | provider default            | Model for the selected provider                       |
+| `KROOS_CHATGPT_MODEL` | `gpt-5.4`                   | Default ChatGPT model                                 |
+| `KROOS_OMLX_MODEL`    | first served                | Default oMLX model                                    |
+| `KROOS_FALLBACK`      | `true`                      | Fall back to the other provider on failure            |
 | `KROOS_OMLX_URL`      | `http://100.111.194.53:8000`| oMLX server (chat completions)                        |
 | `KROOS_OMLX_API_KEY`  | unset                       | oMLX API key                                          |
 | `KROOS_LLM_TIMEOUT`   | `5m`                        | Timeout for primary and heartbeat LLM requests        |
@@ -58,6 +61,10 @@ oMLX:
 kroos config set omlx.api_key <key>
 kroos --provider omlx --model mlx-community/gemma-4-12B-it-8bit
 ```
+
+Providers are interchangeable: if ChatGPT isn't logged in kroos starts on
+oMLX, and if a request fails it retries on the other provider (its default
+model).
 
 Models: `kroos models` lists what each provider offers; `kroos models select`
 picks one and saves it. Inside a session, `/model` lists models and

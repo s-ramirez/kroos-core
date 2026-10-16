@@ -85,10 +85,7 @@ func main() {
 	providers := newProvidersFromEnv()
 	provider := providers.Default
 
-	model := os.Getenv("KROOS_MODEL")
-	if model == "" {
-		model = "gpt-5.4"
-	}
+	model := os.Getenv("KROOS_MODEL") // "" = provider default
 
 	cwd, _ := os.Getwd()
 	home, _ := os.UserHomeDir()
@@ -118,13 +115,19 @@ func main() {
 	llmTimeout := envDuration("KROOS_LLM_TIMEOUT", 300*time.Second)
 	subagentLLMTimeout := envDuration("KROOS_SUBAGENT_LLM_TIMEOUT", llmTimeout)
 
+	// An unusable provider (no login, no URL) isn't fatal: start on the
+	// first ready one. Its model belonged to the old provider, so drop it.
+	if err := providers.Ready(provider); err != nil {
+		if alt := providers.FirstReady(provider); alt != provider {
+			fmt.Fprintf(os.Stderr, "warning: %s unavailable (%v); using %s\n", provider, err, alt)
+			provider, model = alt, ""
+		} else {
+			fmt.Fprintf(os.Stderr, "warning: no LLM provider ready (%v); run `kroos login` or set omlx.url\n", err)
+		}
+	}
 	// Subagents/profiles/tasks without a provider follow the main agent's.
 	providers.Default = provider
-	client, err := providers.New(provider, model, llmTimeout)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
+	client := providers.Client(provider, model, llmTimeout)
 
 	var chatClient llm.ChatClient = client
 	var sessionDir string
@@ -455,7 +458,7 @@ func main() {
 
 	subagentManager, err := subagents.NewManager(
 		func(def subagents.Definition) (llm.ChatClient, error) {
-			return providers.New(def.Provider, def.Model, subagentLLMTimeout)
+			return providers.Client(def.Provider, def.Model, subagentLLMTimeout), nil
 		},
 		sessionDir,
 		defs,
@@ -503,11 +506,7 @@ func main() {
 	taskFactory = func(t tasks.Task) (tasks.AgentSpec, error) {
 		client := chatClient
 		if t.Model != "" {
-			c, err := providers.New("", t.Model, llmTimeout)
-			if err != nil {
-				return tasks.AgentSpec{}, err
-			}
-			client = c
+			client = providers.Client("", t.Model, llmTimeout)
 		}
 		switch t.Agent {
 		case cli.SkillReviewAgent:
@@ -559,7 +558,7 @@ func main() {
 		Tasks:               taskExecutor,
 	}
 
-	clientFor := func(prov, m string) (llm.ChatClient, error) { return providers.New(prov, m, llmTimeout) }
+	clientFor := func(prov, m string) (llm.ChatClient, error) { return providers.Client(prov, m, llmTimeout), nil }
 	runner.ClientFor = clientFor
 	runnerRef = &runner
 
@@ -574,12 +573,7 @@ func main() {
 			if def.Model == "" {
 				return chatClient
 			}
-			c, err := providers.New(def.Provider, def.Model, llmTimeout)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "warning: profile %q: %v; using main client\n", def.Name, err)
-				return chatClient
-			}
-			return c
+			return providers.Client(def.Provider, def.Model, llmTimeout)
 		})
 		pr.ClientFor = clientFor
 		for _, t := range p.Threads {
@@ -661,7 +655,7 @@ func main() {
 		Channels:     channels,
 		Store:        convStore,
 		Commands:     &channel.CommandExpander{Skills: skillsRegistry, Usage: skillUsage},
-		ModelCommand: sessionModelCommand(providers, modelChoice{provider, model}),
+		ModelCommand: sessionModelCommand(providers, modelChoice{provider, displayModel(providers, model)}),
 		Handler:      &channel.Router{Default: &runner, Routes: routes},
 		OnUserInput:  func() { userActivity = true },
 		Logger: func(format string, args ...any) {
@@ -971,4 +965,15 @@ func envOr(name, def string) string {
 		return v
 	}
 	return def
+}
+
+// displayModel names the model a provider will use when none is set explicitly.
+func displayModel(p *llm.Providers, model string) string {
+	if model != "" {
+		return model
+	}
+	if m := p.Models[p.Default]; m != "" {
+		return m
+	}
+	return "auto"
 }

@@ -30,8 +30,16 @@ type modelCatalog struct {
 func newProvidersFromEnv() *llm.Providers {
 	return &llm.Providers{
 		Default: envOr("KROOS_PROVIDER", llm.ProviderChatGPT),
-		OMLXURL: envOr("KROOS_OMLX_URL", configDefault("omlx.url")),
-		OMLXKey: os.Getenv("KROOS_OMLX_API_KEY"),
+		Models: map[string]string{
+			llm.ProviderChatGPT: envOr("KROOS_CHATGPT_MODEL", configDefault("chatgpt.model")),
+			llm.ProviderOMLX:    os.Getenv("KROOS_OMLX_MODEL"),
+		},
+		Fallback: envBool("KROOS_FALLBACK", true),
+		OMLXURL:  envOr("KROOS_OMLX_URL", configDefault("omlx.url")),
+		OMLXKey:  os.Getenv("KROOS_OMLX_API_KEY"),
+		Logf: func(format string, args ...any) {
+			fmt.Fprintf(os.Stderr, "[llm] "+format+"\n", args...)
+		},
 	}
 }
 
@@ -118,7 +126,10 @@ const modelsUsage = `usage:
 // runModels handles `kroos models ...`.
 func runModels(args []string, in io.Reader, out io.Writer) error {
 	p := newProvidersFromEnv()
-	current := modelChoice{p.Default, envOr("KROOS_MODEL", "gpt-5.4")}
+	current := modelChoice{p.Default, os.Getenv("KROOS_MODEL")}
+	if current.Model == "" {
+		current.Model = p.Models[current.Provider]
+	}
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help" || args[0] == "help") {
 		fmt.Fprint(out, modelsUsage)
 		return nil
@@ -169,8 +180,10 @@ func runModels(args []string, in io.Reader, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	// Per-provider default, so switching provider later keeps a valid model.
 	m["provider"] = choice.Provider
-	m["model"] = choice.Model
+	m[choice.Provider+".model"] = choice.Model
+	delete(m, "model")
 	if err := config.Save(path, m); err != nil {
 		return err
 	}
@@ -207,7 +220,7 @@ func sessionModelCommand(p *llm.Providers, defaults modelChoice) func(context.Co
 		if err != nil {
 			return fmt.Sprintf("error: %v\n", err)
 		}
-		if _, err := p.New(choice.Provider, choice.Model, time.Second); err != nil {
+		if err := p.Ready(choice.Provider); err != nil {
 			return fmt.Sprintf("error: %v\n", err)
 		}
 		conv.Provider, conv.Model = choice.Provider, choice.Model

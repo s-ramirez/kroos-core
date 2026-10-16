@@ -160,3 +160,10 @@ func TestListModels(t *testing.T) {
 		t.Fatalf("omlx models = %v, %v", got, err)
 	}
 }
+
+func decodeJSON(t *testing.T, r *http.Request, v any) {
+	t.Helper()
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		t.Errorf("decode: %v", err)
+	}
+}
