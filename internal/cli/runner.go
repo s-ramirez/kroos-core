@@ -51,7 +51,7 @@ type Runner struct {
 	AgentName       string // human-readable name
 	Prompt          string // opening of the system prompt (from AGENTS.md body)
 	// ContextFiles are embedded verbatim at the top of the system prompt.
-	// Typically IDENTITY.md and USER.md from the .kroos/ workspace.
+	// Typically IDENTITY.md and USER.md from $KROOS_HOME.
 	ContextFiles []prompt.ContextFile
 	ContextSize  int // model context window in tokens; 0 = unknown
 	OnUsage      func(usage *types.Usage)

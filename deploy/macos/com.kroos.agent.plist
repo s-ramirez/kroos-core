@@ -4,10 +4,11 @@
 <dict>
   <key>Label</key><string>com.kroos.agent</string>
   <key>ProgramArguments</key><array><string>__ROOT__/deploy/macos/run.sh</string></array>
-  <key>WorkingDirectory</key><string>__ROOT__</string>
+  <key>WorkingDirectory</key><string>__KROOS_HOME__/workspace</string>
   <key>EnvironmentVariables</key><dict>
     <key>PATH</key><string>__GO_DIR__:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     <key>HOME</key><string>__HOME__</string>
+    <key>KROOS_HOME</key><string>__KROOS_HOME__</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>

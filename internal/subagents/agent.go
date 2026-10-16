@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// LoadAgentConfig loads an optional .kroos/AGENTS.md file. Searches dirs in order;
+// LoadAgentConfig loads an optional $KROOS_HOME/AGENTS.md file. Searches dirs in order;
 // last found wins (project overrides home). Returns nil if no file present.
 func LoadAgentConfig(dirs ...string) (*Definition, error) {
 	var found *Definition

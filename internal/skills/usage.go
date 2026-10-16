@@ -43,7 +43,7 @@ func (u UsageEntry) LastActivity() time.Time {
 	return t
 }
 
-// Usage is the JSON sidecar store (.kroos/skills/.usage.json). Writes
+// Usage is the JSON sidecar store ($KROOS_HOME/skills/.usage.json). Writes
 // are atomic (temp + rename) and serialized in-process.
 type Usage struct {
 	path string

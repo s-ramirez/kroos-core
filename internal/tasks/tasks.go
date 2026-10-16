@@ -92,7 +92,7 @@ type Run struct {
 
 // Executor runs tasks in the background.
 type Executor struct {
-	Dir     string // .kroos/tasks: history + per-task state dirs
+	Dir     string // $KROOS_HOME/tasks: history + per-task state dirs
 	Factory Factory
 	Deliver Deliverer
 	Log     func(format string, args ...any)

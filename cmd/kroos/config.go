@@ -13,7 +13,7 @@ import (
 	"github.com/s-ramirez/kroos-core/internal/config"
 )
 
-const configUsage = `usage: kroos config <command> [--project] [args]
+const configUsage = `usage: kroos config <command> [args]
 
 commands:
   show            show resolved config (secrets masked; --reveal to show)
@@ -24,12 +24,11 @@ commands:
   path            print config file path
   edit            open config file in $EDITOR
 
---project targets .kroos/config.json instead of ~/.kroos/config.json.
+Config file: $KROOS_HOME/config.json (default ~/.kroos/config.json).
 `
 
 func runConfig(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("config", flag.ContinueOnError)
-	project := fs.Bool("project", false, "use project config (.kroos/config.json)")
 	reveal := fs.Bool("reveal", false, "show secret values unmasked")
 	fs.Usage = func() { fmt.Fprint(out, configUsage) }
 	// Allow flags anywhere: pull them out before positional parsing.
@@ -50,9 +49,6 @@ func runConfig(args []string, out io.Writer) error {
 	}
 
 	path := config.GlobalPath()
-	if *project {
-		path = config.ProjectPath()
-	}
 	cmd, rest := pos[0], pos[1:]
 
 	switch cmd {

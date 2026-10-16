@@ -1,7 +1,7 @@
 // Package config maps dotted configuration keys (e.g. "heartbeat.interval")
 // to the KROOS_* environment variables the runtime reads, and persists them
 // in JSON config files. Precedence, highest first: CLI flag, process env,
-// .env, project config (.kroos/config.json), global config (~/.kroos/config.json).
+// $KROOS_HOME/.env, $KROOS_HOME/config.json.
 package config
 
 import (
@@ -29,7 +29,7 @@ var Keys = []Key{
 	{"fallback", "KROOS_FALLBACK", "true", "Fall back to the other provider when one fails", false},
 	{"chatgpt.model", "KROOS_CHATGPT_MODEL", "gpt-5.4", "Default ChatGPT model", false},
 	{"omlx.model", "KROOS_OMLX_MODEL", "", "Default oMLX model (empty = first served)", false},
-	{"omlx.url", "KROOS_OMLX_URL", "http://100.111.194.53:8000", "oMLX server URL", false},
+	{"omlx.url", "KROOS_OMLX_URL", "", "oMLX server URL (e.g. http://host:8000)", false},
 	{"omlx.api_key", "KROOS_OMLX_API_KEY", "", "oMLX API key", true},
 	{"llm.timeout", "KROOS_LLM_TIMEOUT", "5m", "LLM request timeout", false},
 	{"llm.subagent_timeout", "KROOS_SUBAGENT_LLM_TIMEOUT", "", "Subagent LLM timeout (default: llm.timeout)", false},
@@ -91,17 +91,25 @@ func Lookup(name string) (Key, bool) {
 	return Key{}, false
 }
 
-// GlobalPath is ~/.kroos/config.json.
-func GlobalPath() string {
+// Home is the instance directory holding all per-instance state (config,
+// auth, .env, agent files, skills, memory, conversations, tasks):
+// $KROOS_HOME, default ~/.kroos. It is read from the real environment only.
+func Home() string {
+	if h := strings.TrimSpace(os.Getenv("KROOS_HOME")); h != "" {
+		if abs, err := filepath.Abs(h); err == nil {
+			return abs
+		}
+		return h
+	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".kroos", "config.json")
+	return filepath.Join(home, ".kroos")
 }
 
-// ProjectPath is <cwd>/.kroos/config.json.
-func ProjectPath() string {
-	cwd, _ := os.Getwd()
-	return filepath.Join(cwd, ".kroos", "config.json")
-}
+// GlobalPath is $KROOS_HOME/config.json.
+func GlobalPath() string { return filepath.Join(Home(), "config.json") }
+
+// EnvPath is $KROOS_HOME/.env.
+func EnvPath() string { return filepath.Join(Home(), ".env") }
 
 // Load reads a config file. A missing file yields an empty map.
 func Load(path string) (map[string]string, error) {

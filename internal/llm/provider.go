@@ -22,7 +22,7 @@ type Providers struct {
 	Fallback bool              // try the other providers when one fails
 	OMLXURL  string
 	OMLXKey  string
-	AuthPath string // ChatGPT token store (default ~/.kroos/auth.json)
+	AuthPath string // ChatGPT token store (default $KROOS_HOME/auth.json)
 	Logf     func(format string, args ...any)
 
 	mu          sync.Mutex

@@ -87,12 +87,10 @@ func main() {
 
 	model := os.Getenv("KROOS_MODEL") // "" = provider default
 
-	cwd, _ := os.Getwd()
-	home, _ := os.UserHomeDir()
-	agentDirs := []string{
-		filepath.Join(home, ".kroos"),
-		filepath.Join(cwd, ".kroos"),
-	}
+	// All instance state lives in KROOS_HOME; cwd is only the tools' working dir.
+	kroosHome := config.Home()
+	_ = os.Setenv("KROOS_HOME", kroosHome) // visible to bash and the agent
+	agentDirs := []string{kroosHome}
 	agentCfg, err := subagents.LoadAgentConfig(agentDirs...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: loading agent config: %v\n", err)
@@ -163,10 +161,7 @@ func main() {
 		p.Init(api)
 	}
 
-	subagentDirs := []string{
-		filepath.Join(home, ".kroos", "subagents"),
-		filepath.Join(cwd, ".kroos", "subagents"),
-	}
+	subagentDirs := []string{filepath.Join(kroosHome, "subagents")}
 	defs, subagentDiags, err := subagents.LoadDefinitions(subagentDirs...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: loading subagents: %v\n", err)
@@ -177,8 +172,7 @@ func main() {
 	searchDelegationGuidelines := subagents.SearchDelegationGuidelines(defs)
 
 	profiles, profileDiags, err := subagents.LoadProfiles(
-		filepath.Join(home, ".kroos", "profiles"),
-		filepath.Join(cwd, ".kroos", "profiles"),
+		filepath.Join(kroosHome, "profiles"),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: loading profiles: %v\n", err)
@@ -187,15 +181,15 @@ func main() {
 		fmt.Fprintf(os.Stderr, "warning: %s\n", d)
 	}
 
-	memoryStore := memory.NewStore(filepath.Join(cwd, ".kroos", "memory"))
+	memoryStore := memory.NewStore(filepath.Join(kroosHome, "memory"))
 
 	// Per-(channel, thread) isolation for non-CLI channels. CLI and sched
 	// keep the shared project workspace + memory; discord/imessage/etc
 	// get their own workspace dir and memory dir provisioned on first
 	// inbound message.
-	kroosStateDir := filepath.Join(cwd, ".kroos", "state")
-	kroosWorkspacesDir := filepath.Join(cwd, ".kroos", "workspaces")
-	kroosMemoryDir := filepath.Join(cwd, ".kroos", "memory")
+	kroosStateDir := filepath.Join(kroosHome, "state")
+	kroosWorkspacesDir := filepath.Join(kroosHome, "workspaces")
+	kroosMemoryDir := filepath.Join(kroosHome, "memory")
 	provisioner := &threadProvisioner{
 		exempt:         map[string]bool{clichannel.Name: true, sched.Name: true},
 		workspacesRoot: kroosWorkspacesDir,
@@ -207,7 +201,7 @@ func main() {
 	// tool closes over it to route each call to the turn's active store.
 	var runnerRef *cli.Runner
 
-	scheduleStore, err := schedule.NewStore(filepath.Join(cwd, ".kroos", "schedule"))
+	scheduleStore, err := schedule.NewStore(filepath.Join(kroosHome, "schedule"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: loading schedule store: %v\n", err)
 	}
@@ -274,7 +268,7 @@ func main() {
 		tools.NewFindTool(searchDelegationGuidelines...),
 		tools.NewWebFetchTool(),
 		tools.NewWebSearchTool(),
-		tools.NewSecretTool(filepath.Join(cwd, ".env")),
+		tools.NewSecretTool(config.EnvPath()),
 		tools.NewMemoryToolResolving(func() *memory.Store {
 			if runnerRef != nil {
 				return runnerRef.ActiveMemoryStore()
@@ -290,7 +284,7 @@ func main() {
 	taskCtx, cancelTasks := context.WithCancel(context.Background())
 	defer cancelTasks()
 	var taskFactory tasks.Factory
-	taskExecutor := tasks.NewExecutor(taskCtx, filepath.Join(cwd, ".kroos", "tasks"),
+	taskExecutor := tasks.NewExecutor(taskCtx, filepath.Join(kroosHome, "tasks"),
 		func(t tasks.Task) (tasks.AgentSpec, error) {
 			if taskFactory == nil {
 				return tasks.AgentSpec{}, fmt.Errorf("task runtime not ready")
@@ -415,10 +409,7 @@ func main() {
 		}
 	}
 
-	skillDirs := []string{
-		filepath.Join(home, ".kroos", "skills"),
-		filepath.Join(cwd, ".kroos", "skills"),
-	}
+	skillDirs := []string{filepath.Join(kroosHome, "skills")}
 	loadedSkills, diags, err := skills.LoadSkills(skillDirs...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: loading skills: %v\n", err)
@@ -438,8 +429,8 @@ func main() {
 		skillsRegistry.Replace(reloaded)
 		return nil
 	}
-	projectSkillsDir := filepath.Join(cwd, ".kroos", "skills")
-	skillLogPath := filepath.Join(cwd, ".kroos", "logs", "skill_writes.log")
+	projectSkillsDir := filepath.Join(kroosHome, "skills")
+	skillLogPath := filepath.Join(kroosHome, "logs", "skill_writes.log")
 	// Skill tools are orchestrator-only — appended to allTools, not
 	// builtinTools, so subagents don't inherit them.
 	skillUsage := skills.NewUsage(filepath.Join(projectSkillsDir, ".usage.json"))
@@ -492,7 +483,7 @@ func main() {
 		contextSize = agentCfg.ContextSize
 	}
 
-	// Load IDENTITY.md and USER.md from agentDirs; last found wins (project overrides home).
+	// Load IDENTITY.md and USER.md from agentDirs;
 	contextFiles := loadContextFiles(agentDirs, "IDENTITY.md", "USER.md")
 
 	// Background agents get the builtins minus the task tool (no
@@ -824,10 +815,10 @@ func filterTools(in []tools.Tool, allowed map[string]struct{}) []tools.Tool {
 // loadEnvAndConfig fills unset env vars from .env, then project config, then
 // global config.
 func loadEnvAndConfig() {
-	if err := loadDotenv(".env"); err != nil {
+	if err := loadDotenv(config.EnvPath()); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: loading .env: %v\n", err)
 	}
-	if err := config.Apply(config.ProjectPath(), config.GlobalPath()); err != nil {
+	if err := config.Apply(config.GlobalPath()); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: loading config: %v\n", err)
 	}
 }

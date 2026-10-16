@@ -17,6 +17,28 @@ manages its own skills and memory.
 - Sub-agents, channel-bound profiles, persistent memory
 - macOS launchd deployment that auto-deploys `main`
 
+## Instance home
+
+Everything specific to one kroos instance lives in **`$KROOS_HOME`** (default
+`~/.kroos`), never in the code checkout:
+
+```
+$KROOS_HOME/
+  config.json      settings (kroos config set …)
+  .env             secrets and env overrides (also where the agent's secret tool writes)
+  auth.json        ChatGPT tokens
+  AGENTS.md  IDENTITY.md  USER.md
+  skills/  subagents/  profiles/  memory/
+  state/           conversations
+  schedule/  tasks/  workspaces/  logs/
+  workspace/       working directory when run as a service
+```
+
+So anyone can run their own instance from the same code. Clone the repo and
+point `KROOS_HOME` wherever you like (one directory per instance). Pulling new
+code never touches instance data. `KROOS_HOME` is read from the real
+environment only, not from `.env` or `config.json`.
+
 ## Prerequisites
 
 - Go 1.26.1+
@@ -25,11 +47,32 @@ manages its own skills and memory.
 ## Quick start
 
 ```sh
-go run ./cmd/kroos init                         # scaffold .kroos/ (AGENTS.md, IDENTITY.md, USER.md, …)
-go run ./cmd/kroos login                        # ChatGPT sign-in (optional)
-go run ./cmd/kroos config set omlx.api_key <key> # oMLX key (optional)
+go run ./cmd/kroos init    # scaffold $KROOS_HOME and run the setup wizard
 go run ./cmd/kroos
 ```
+
+`kroos init` is an interactive, menu-driven setup you can re-run any time:
+
+```
+== Setup ==
+  1. Providers          default chatgpt · chatgpt: logged in · gpt-5.4 · omlx: http://host:8000 · auto model
+  2. Channels           discord: enabled · telegram: not configured · imessage: disabled
+  3. Heartbeat          every 30m → discord
+  4. Extras             web UI :8420
+  5. Done
+```
+
+- **Providers:** log in to ChatGPT, set the oMLX URL and key (the connection
+  is tested), pick each default model from the live list, choose the default
+  provider and fallback.
+- **Channels:** enable or disable Discord, Telegram or iMessage and fill in
+  their settings. Disabling keeps credentials for later.
+- **Heartbeat** and **Extras:** web UI, web search key, logging.
+
+It starts from your current `$KROOS_HOME/config.json`. Enter keeps a value,
+`-` clears it, secrets are masked (and hidden while typing), and every change
+is saved immediately. Templates (`AGENTS.md`, `IDENTITY.md`, `USER.md`) are
+written only if missing.
 
 Or install the binary: `go install ./cmd/kroos` (lands in `~/go/bin`).
 
@@ -37,7 +80,7 @@ Or install the binary: `go install ./cmd/kroos` (lands in `~/go/bin`).
 
 | Provider  | Auth                                                     | Endpoint                                |
 |-----------|----------------------------------------------------------|-----------------------------------------|
-| `chatgpt` | `kroos login` (device code; tokens in `~/.kroos/auth.json`, auto-refreshed) | `chatgpt.com/backend-api/codex` (Responses API) |
+| `chatgpt` | `kroos login` (device code; tokens in `$KROOS_HOME/auth.json`, auto-refreshed) | `chatgpt.com/backend-api/codex` (Responses API) |
 | `omlx`    | `omlx.api_key`                                           | `omlx.url` + `/v1/chat/completions`     |
 
 `kroos logout` removes the ChatGPT tokens.
@@ -51,7 +94,7 @@ Or install the binary: `go install ./cmd/kroos` (lands in `~/go/bin`).
   `kroos config set fallback false`.
 - Logging in mid-run is picked up without a restart.
 
-**oMLX over Tailscale.** The default `omlx.url` is the Mac Studio's Tailscale IP.
+**Remote oMLX** (e.g. over Tailscale): set `omlx.url` to the host's address.
 oMLX must listen on all interfaces (`--host 0.0.0.0`), not just `127.0.0.1`.
 
 ## Models
@@ -70,7 +113,7 @@ kroos models                 # list models from both providers (* = current)
 kroos models omlx            # one provider
 kroos models select          # numbered picker; saves provider + <provider>.model
 kroos models select 3        # or pick by number, name, or provider:model
-kroos models select --project omlx:gemma-4-31b-it-4bit
+kroos models select omlx:gemma-4-31b-it-4bit
 ```
 
 In a session:
@@ -88,15 +131,14 @@ The `/model` choice is per conversation and persists with its history.
 Every setting has a dotted key. `kroos config keys` lists them all.
 
 ```sh
-kroos config set provider omlx           # ~/.kroos/config.json
-kroos config set model gpt-5.4 --project # .kroos/config.json
+kroos config set provider omlx           # $KROOS_HOME/config.json
 kroos config show
 kroos --provider omlx --model qwen ...   # per-run flags
 kroos --set heartbeat.interval=15m
 ```
 
-Precedence: flag > env > `.env` > project config > global config. A local
-`.env` is loaded automatically; see `.env.example`.
+Precedence: flag > env > `$KROOS_HOME/.env` > `$KROOS_HOME/config.json`. See
+`.env.example`.
 
 Core settings:
 
@@ -106,7 +148,7 @@ Core settings:
 | `model`                | `KROOS_MODEL`               | provider default             |
 | `chatgpt.model`        | `KROOS_CHATGPT_MODEL`       | `gpt-5.4`                    |
 | `omlx.model`           | `KROOS_OMLX_MODEL`          | first served                 |
-| `omlx.url`             | `KROOS_OMLX_URL`            | `http://100.111.194.53:8000` |
+| `omlx.url`             | `KROOS_OMLX_URL`            | unset                        |
 | `omlx.api_key`         | `KROOS_OMLX_API_KEY`        | unset                        |
 | `fallback`             | `KROOS_FALLBACK`            | `true`                       |
 | `llm.timeout`          | `KROOS_LLM_TIMEOUT`         | `5m`                         |
@@ -120,7 +162,7 @@ are listed by `kroos config keys`.
 
 ## Sub-agents and profiles
 
-Sub-agents (`.kroos/subagents/*.md`) and profiles (`.kroos/profiles/*.md`) pick
+Sub-agents (`$KROOS_HOME/subagents/*.md`) and profiles (`$KROOS_HOME/profiles/*.md`) pick
 a provider in frontmatter:
 
 | Field      | Description                                              |
@@ -133,7 +175,7 @@ Fallback applies to them too. Shipped examples: `gpt.md` (ChatGPT) and
 
 ## Customizing the main agent
 
-`.kroos/agent.md` (project) or `~/.kroos/agent.md` (user) uses the same
+`$KROOS_HOME/AGENTS.md` uses the same
 frontmatter. Its body becomes a `# Personality` section of the system prompt.
 `tools` and `model` are required. `plugins` and `provider` are optional.
 
@@ -150,7 +192,9 @@ You are a senior Go engineer. Prefer minimal diffs and be terse.
 
 ## Deploying (macOS)
 
-`deploy/macos/` runs kroos as launchd agents on an always-on Mac (e.g. a Mac mini):
+`deploy/macos/` runs kroos as launchd agents on an always-on Mac (e.g. a Mac
+mini). The code checkout holds only source and `bin/`. The agent runs with
+`KROOS_HOME` set and its working directory in `$KROOS_HOME/workspace`.
 
 - `com.kroos.agent`: runs `bin/kroos` and keeps it alive
 - `com.kroos.deploy`: every 5 min, pulls `origin/main`, then tests, builds and
@@ -160,16 +204,15 @@ You are a senior Go engineer. Prefer minimal diffs and be terse.
 Setup on the target machine:
 
 ```sh
-git clone <repo> ~/kroos-prod && cd ~/kroos-prod
-deploy/macos/install.sh
-go build -o bin/kroos ./cmd/kroos
-bin/kroos login                          # run on this machine; don't copy auth.json
-bin/kroos config set omlx.api_key <key>
+git clone git@github.com:s-ramirez/kroos-core.git ~/kroos-core && cd ~/kroos-core
+deploy/macos/install.sh                  # KROOS_HOME=/path deploy/macos/install.sh for a custom home
+bin/kroos init                           # wizard: ChatGPT login, oMLX, channels, heartbeat
 launchctl kickstart -k gui/$(id -u)/com.kroos.agent
 ```
 
-Credentials live in `~/.kroos/`. Run `kroos login` on each machine: ChatGPT
-rotates refresh tokens, so machines sharing one token log each other out.
+Run `kroos login` on each machine: ChatGPT rotates refresh tokens, so machines
+sharing one token log each other out. Use the same `KROOS_HOME` for these
+`bin/kroos` commands as you gave `install.sh`.
 
 Check it:
 

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/s-ramirez/kroos-core/internal/config"
 	"io"
 	"net/http"
 	"net/url"
@@ -19,7 +20,7 @@ import (
 )
 
 // ChatGPT subscription auth (Codex OAuth), ported from hermes-agent
-// hermes_cli/auth_codex.py. Tokens live in ~/.kroos/auth.json under "chatgpt".
+// hermes_cli/auth_codex.py. Tokens live in $KROOS_HOME/auth.json under "chatgpt".
 const (
 	chatgptIssuer       = "https://auth.openai.com"
 	chatgptClientID     = "app_EMoamEEZ73f0CkXaXp7hrann"
@@ -46,11 +47,8 @@ type ChatGPTAuth struct {
 	tokens ChatGPTTokens
 }
 
-// DefaultAuthPath is ~/.kroos/auth.json.
-func DefaultAuthPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".kroos", "auth.json")
-}
+// DefaultAuthPath is $KROOS_HOME/auth.json.
+func DefaultAuthPath() string { return filepath.Join(config.Home(), "auth.json") }
 
 // LoadChatGPTAuth reads stored tokens; ErrNotLoggedIn if absent.
 func LoadChatGPTAuth(path string) (*ChatGPTAuth, error) {

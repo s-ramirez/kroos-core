@@ -13,7 +13,7 @@ tools: ["*"]
 
 ## Project Structure & Module Organization
 
-- CLI entrypoint: `cmd/kroos/` (`main.go` wires dependencies; `init.go` bootstraps a `.kroos` workspace; embedded templates under `cmd/kroos/templates/`).
+- CLI entrypoint: `cmd/kroos/` (`main.go` wires dependencies; `init.go` bootstraps `$KROOS_HOME`; embedded templates under `cmd/kroos/templates/`).
 - Internal packages under `internal/`:
   - `cli/` — interactive runner and agent loop (`runner.go:Runner.agentLoop`).
   - `llm/` — OpenAI-compatible chat completions client.
@@ -24,7 +24,7 @@ tools: ["*"]
   - `subagents/` — multi-provider sub-agent definitions.
   - `memory/` — persistent memory store.
   - `compaction/`, `schedule/`, `plugin/`, `types/` — supporting packages.
-- Workspace state: `.kroos/` (project) and `~/.kroos/` (user) hold `AGENTS.md`, `IDENTITY.md`, `USER.md`, `memory/`, `skills/`, `subagents/`.
+- Instance state: `$KROOS_HOME` (default `~/.kroos`) holds `config.json`, `auth.json`, `.env`, `AGENTS.md`, `IDENTITY.md`, `USER.md`, `memory/`, `skills/`, `subagents/`, `profiles/`, `state/`, `tasks/`, `schedule/`, `workspace/`. Nothing instance-specific lives in the code checkout.
 - Reference docs and templates live under `docs/reference/`.
 
 ## Build, Test, and Development Commands
@@ -36,7 +36,7 @@ tools: ["*"]
 - Single package: `go test ./internal/tools/`
 - Single test: `go test ./internal/tools/ -run TestGrepToolFindsPattern`
 - Verbose: `go test -v ./...`
-- Bootstrap a workspace: `kroos init` (writes `.kroos/AGENTS.md`, `.kroos/IDENTITY.md`, `.kroos/USER.md`, `.kroos/memory/MEMORY.md`, prompts for `.env` keys).
+- Bootstrap a workspace: `kroos init` (writes `AGENTS.md`, `IDENTITY.md`, `USER.md`, `memory/MEMORY.md` into `$KROOS_HOME`, prompts for `$KROOS_HOME/.env` keys).
 - Preferred landing bar before pushing `main`: `go build ./...` and `go test ./...` green.
 - For narrowly scoped changes, prefer a narrowly scoped test that directly validates the touched behavior. If no meaningful scoped test exists, say so explicitly.
 - Do not use scoped tests as permission to ignore plausibly related failures.
@@ -54,7 +54,7 @@ tools: ["*"]
 - **Tool interface** (`internal/tools/types.go`): `Tool.Definition()` returns metadata + JSON schema; `Tool.Execute(ctx, json.RawMessage)` returns `(ToolResult, error)`. Tool-level errors (bad args, file not found) are returned as `ToolResult{IsError: true}` via `errorResult`/`errorResultf` helpers, not as Go errors.
 - **Tool hooks** (`internal/tools/types.go`): `BeforeToolCall` can block execution by returning a reason string; `AfterToolCall` observes results. Hooks register on the `Registry`.
 - **Filesystem abstraction** (`internal/tools/fs.go`): Tools that touch files take an `FS` interface. Production uses `OSFS{}`. Directory-walking tools (`grep`, `find`, `bash`) use `os` directly.
-- **Skills** (`internal/skills/`): `SKILL.md` files with YAML frontmatter (`name`, `description`, `disable-model-invocation`). Discovered from `~/.kroos/skills/` and `.kroos/skills/`. First name wins on collision. Invoke with `/skill:<name> [args]`.
+- **Skills** (`internal/skills/`): `SKILL.md` files with YAML frontmatter (`name`, `description`, `disable-model-invocation`). Discovered from `$KROOS_HOME/skills/`. Invoke with `/skill:<name> [args]`.
 - **System prompt** (`internal/prompt/system.go`): `BuildSystemPrompt(tools, skills, env, ...)` assembles environment info, per-tool guidelines, tool-selection rules, `<available_skills>` block, and injects context files (`IDENTITY.md`, `USER.md`) at the top.
 - **Channels** (`internal/channel/`): `Channel` has `Name()`, `Listen(ctx, out chan<- Inbound)`, and `Send(ctx, Outbound)`. The `Dispatcher` fans out to all channels and routes conversations by `(Channel, Thread)`. When refactoring shared channel logic (routing, allowlists, filtering), always consider **all** channels.
 
@@ -105,7 +105,7 @@ tools: ["*"]
 ## Core Preservation Policy
 
 - Treat `cmd/kroos/` and `internal/` as the product core. Avoid changing them unless the user explicitly asks for a core change or there is no credible extension-point alternative.
-- Prefer solving new behavior in `.kroos/` first: skills, memory, subagents, docs, scripts, generated assets, small helper apps, and other workspace-local artifacts are fair game.
-- Before proposing a core edit, first check whether a skill, prompt/context update, plugin, wrapper script, config/env change, or `.kroos/` artifact can achieve the goal with less churn.
+- Prefer solving new behavior in `$KROOS_HOME` first: skills, memory, subagents, docs, scripts, generated assets, small helper apps, and other workspace-local artifacts are fair game.
+- Before proposing a core edit, first check whether a skill, prompt/context update, plugin, wrapper script, config/env change, or `$KROOS_HOME` artifact can achieve the goal with less churn.
 - If a core edit is truly necessary, say why the extension-point path is insufficient before making the change.
 - Uncommitted changes in core files are not yours to tidy up or build on casually. Treat them as high-risk and avoid touching them unless explicitly required.

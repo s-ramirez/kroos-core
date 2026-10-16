@@ -119,7 +119,7 @@ func (cat modelCatalog) resolve(arg, defProvider string) (modelChoice, error) {
 
 const modelsUsage = `usage:
   kroos models [chatgpt|omlx]             list available models (* = configured)
-  kroos models select [--project] [pick]  choose a model and save it to config
+  kroos models select [pick]            choose a model and save it to config
                                           pick = list number, model, or provider:model
 `
 
@@ -145,7 +145,6 @@ func runModels(args []string, in io.Reader, out io.Writer) error {
 	}
 
 	fs := flag.NewFlagSet("models select", flag.ContinueOnError)
-	project := fs.Bool("project", false, "save to project config (.kroos/config.json)")
 	fs.SetOutput(out)
 	var pos []string
 	rest := args[1:]
@@ -173,9 +172,6 @@ func runModels(args []string, in io.Reader, out io.Writer) error {
 		return err
 	}
 	path := config.GlobalPath()
-	if *project {
-		path = config.ProjectPath()
-	}
 	m, err := config.Load(path)
 	if err != nil {
 		return err
